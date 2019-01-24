@@ -75,7 +75,7 @@ func (h *HTTPServer) run(ctx context.Context) (err error) {
 			writer.Header().Add(k, v)
 		}
 
-		result, err = svc.RunMethod(meta.Method, NewContext(writer, request))
+		result, err = svc.RunMethod(meta.Method, newContext(writer, request))
 	})
 	h.isRun = true
 	log.Println("http server is start")
