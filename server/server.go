@@ -1,12 +1,18 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/seefan/microgo/service"
 )
+
+type Runnable interface {
+	Start(ctx context.Context) error
+	Stop() error
+}
 
 // Server for basic
 type Server struct {

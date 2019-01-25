@@ -31,6 +31,11 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 }
 
 // Start the server
+func (h *HTTPServer) Stop() error {
+	return nil
+}
+
+// Start the server
 func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	return h.run(ctx)
 }
