@@ -13,8 +13,8 @@ type HTTPContext struct {
 }
 
 // NewContext new NewContext
-func newContext(writer http.ResponseWriter, request *http.Request) HTTPContext {
-	c := HTTPContext{
+func newContext(writer http.ResponseWriter, request *http.Request) *HTTPContext {
+	c := &HTTPContext{
 		Request:  request,
 		Response: writer,
 	}
