@@ -5,8 +5,8 @@ type Context struct {
 }
 
 // NewContext new NewContext
-func NewContext() Context {
-	return Context{
+func NewContext() *Context {
+	return &Context{
 		c: make(map[string][]string),
 	}
 }
