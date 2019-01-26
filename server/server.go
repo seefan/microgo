@@ -21,6 +21,7 @@ type Server struct {
 	Name       string
 	serviceMap map[string]*service.Archive
 	a          time.Time
+	InitFunc   func()
 }
 
 // Init init server

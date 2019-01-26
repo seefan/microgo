@@ -37,6 +37,9 @@ func (h *HTTPServer) Stop() error {
 
 // Start the server
 func (h *HTTPServer) Start(ctx context.Context) (err error) {
+	if h.InitFunc != nil {
+		h.InitFunc()
+	}
 	return h.run(ctx)
 }
 func (h *HTTPServer) run(ctx context.Context) (err error) {
