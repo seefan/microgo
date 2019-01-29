@@ -57,6 +57,8 @@ func (h *HTTPServer) run(ctx context.Context) (err error) {
 					if v != nil {
 						if e, ok := v.(error); ok {
 							re["error"] = e.Error()
+						} else if i == 0 {
+							re["data"] = v
 						} else {
 							re["data"+strconv.Itoa(i)] = v
 						}
