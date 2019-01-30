@@ -1,8 +1,8 @@
 package main
 
 import (
+	"github.com/seefan/microgo/httpserver"
 	"github.com/seefan/microgo/run"
-	"github.com/seefan/microgo/server/httpserver"
 	"github.com/seefan/microgo/test"
 )
 

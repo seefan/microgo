@@ -1,7 +1,8 @@
-package service
+package httpserver
 
 import (
 	"errors"
+	"github.com/seefan/microgo/service"
 	"log"
 	"reflect"
 	"runtime"
@@ -9,14 +10,14 @@ import (
 )
 
 // Unit
-type Unit struct {
+type unit struct {
 	svr     reflect.Value
 	method  map[string]reflect.Value
 	Version string
 	Name    string
 }
 
-func (a *Unit) resolve(s Service) {
+func (a *unit) resolve(s service.Service) {
 	a.Version = s.Version()
 	a.Name = s.Name()
 	a.svr = reflect.ValueOf(s)
@@ -25,8 +26,8 @@ func (a *Unit) resolve(s Service) {
 		a.method[strings.ToLower(t.Method(i).Name)] = a.svr.MethodByName(t.Method(i).Name)
 	}
 }
-func newUnit(s Service) *Unit {
-	a := &Unit{
+func NewUnit(s service.Service) *unit {
+	a := &unit{
 		method: make(map[string]reflect.Value),
 	}
 	a.resolve(s)
@@ -34,7 +35,7 @@ func newUnit(s Service) *Unit {
 }
 
 // RunMethod run a method
-func (a *Unit) RunMethod(name string, param ...interface{}) (re []interface{}, err error) {
+func (a *unit) RunMethod(name string, param ...interface{}) (re []interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = errors.New("RuntimeError")
