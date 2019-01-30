@@ -2,11 +2,7 @@ package server
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
-
-	"github.com/seefan/microgo/service"
 )
 
 type Runnable interface {
@@ -16,17 +12,14 @@ type Runnable interface {
 
 // Server for basic
 type Server struct {
-	Host       string
-	Port       int
-	Name       string
-	serviceMap map[string]*service.Archive
-	a          time.Time
-	InitFunc   func()
+	Host     string
+	Port     int
+	Name     string
+	InitFunc func()
 }
 
 // Init init server
 func (s *Server) Init(host string, port int, name ...string) {
-	s.serviceMap = make(map[string]*service.Archive)
 	if len(name) > 0 {
 		s.Name = name[0]
 	}
@@ -37,24 +30,6 @@ func (s *Server) Init(host string, port int, name ...string) {
 // Address get server address
 func (s *Server) Address() string {
 	return fmt.Sprintf("%s:%d", s.Host, s.Port)
-}
-
-// Register the service with the server
-//
-func (s *Server) Register(svc service.Service) {
-	if _, ok := s.serviceMap[svc.Name()]; !ok {
-		s.serviceMap[svc.Name()] = service.NewArchive()
-	}
-	s.serviceMap[svc.Name()].PutService(svc)
-}
-
-// GetServiceArchive get service archive
-func (s *Server) GetService(name string) (*service.Archive, error) {
-	if svc, ok := s.serviceMap[name]; ok {
-		return svc, nil
-	} else {
-		return nil, errors.New("UnknownService")
-	}
 }
 
 // String return a short paragraph of explanatory text
