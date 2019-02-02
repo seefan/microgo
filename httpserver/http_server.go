@@ -26,7 +26,8 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 	hs := &HTTPServer{
 		header: map[string]string{
 			"Access-Control-Allow-Origin":  "*",
-			"Access-Control-Allow-Headers": "content-type",
+			"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+			"Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Connection, User-Agent, Cookie,token,uid",
 		},
 		svc: make(map[string]*archive),
 	}
