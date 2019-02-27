@@ -12,6 +12,11 @@ type HTTPContext struct {
 	Response http.ResponseWriter
 }
 
+// Get get on param
+func (h *HTTPContext) Set(forms url.Values) {
+	h.forms = forms
+}
+
 // NewContext new NewContext
 func newContext(writer http.ResponseWriter, request *http.Request) *HTTPContext {
 	c := &HTTPContext{

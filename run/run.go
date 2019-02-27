@@ -14,7 +14,7 @@ import (
 	"syscall"
 )
 
-func Run(r server.Runnable) {
+func Run(r server.Runnable, outFile ...string) {
 	defer printErr()
 	cmd := "debug"
 	if len(os.Args) > 1 {
@@ -35,6 +35,20 @@ func Run(r server.Runnable) {
 		if err := savePid(pidFile); err != nil {
 			println(err.Error())
 		}
+		var f *os.File
+		if len(outFile) > 0 {
+			logFile := filepath.Join(filepath.Dir(os.Args[0]), outFile[0])
+			tmp := filepath.Dir(logFile)
+			if _, err := os.Stat(tmp); os.IsNotExist(err) {
+				if err := os.MkdirAll(tmp, 0764); err != nil {
+					panic(err.Error())
+				}
+			}
+			if f, err = os.Create(logFile); err != nil {
+				panic(err.Error())
+			}
+			defer f.Close()
+		}
 		nohup(func() error {
 			return start(path, r)
 		}, func(signal os.Signal, e error) {
@@ -45,7 +59,7 @@ func Run(r server.Runnable) {
 					println(e.Error())
 				}
 			}
-		}, nil, syscall.SIGINT, syscall.SIGKILL)
+		}, f, syscall.SIGINT, syscall.SIGKILL)
 	case "stop":
 		if err := stopByPidFile(pidFile); err != nil {
 			println(err.Error())

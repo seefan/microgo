@@ -26,7 +26,8 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 	hs := &HTTPServer{
 		header: map[string]string{
 			"Access-Control-Allow-Origin":  "*",
-			"Access-Control-Allow-Headers": "content-type",
+			"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
+			"Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Connection, User-Agent, Cookie,token,uid",
 		},
 		svc: make(map[string]*archive),
 	}
@@ -67,7 +68,7 @@ func (h *HTTPServer) run(ctx context.Context) (err error) {
 			if result != nil {
 				for i, v := range result {
 					if v != nil {
-						if e, ok := v.(error); ok {
+						if e, ok := v.(error); ok && e != nil {
 							re["error"] = e.Error()
 						} else if i == 0 {
 							re["data"] = v
