@@ -26,9 +26,7 @@ func Run(r server.Runnable, outFile ...string) {
 		path = os.Args[0]
 	}
 	path = filepath.Dir(path)
-	path += string(os.PathSeparator)
-
-	pidFile := path + "pid.save"
+	pidFile := filepath.Join(path, "pid.save")
 
 	switch cmd {
 	case "start":
@@ -37,7 +35,7 @@ func Run(r server.Runnable, outFile ...string) {
 		}
 		var f *os.File
 		if len(outFile) > 0 {
-			logFile := filepath.Join(filepath.Dir(os.Args[0]), outFile[0])
+			logFile := filepath.Join(path, outFile[0])
 			tmp := filepath.Dir(logFile)
 			if _, err := os.Stat(tmp); os.IsNotExist(err) {
 				if err := os.MkdirAll(tmp, 0764); err != nil {
@@ -47,7 +45,11 @@ func Run(r server.Runnable, outFile ...string) {
 			if f, err = os.Create(logFile); err != nil {
 				panic(err.Error())
 			}
-			defer f.Close()
+			defer func() {
+				if err = f.Close(); err != nil {
+					println(err.Error())
+				}
+			}()
 		}
 		nohup(func() error {
 			return start(path, r)
