@@ -80,15 +80,14 @@ func (h *HTTPServer) run(ctx context.Context) error {
 				if _, ok := re["error"]; !ok {
 					re["error"] = 0
 				}
-				if bs, err := json.Marshal(re); err == nil {
-					if _, err := writer.Write(bs); err != nil {
-						log.Println(err)
-					}
+			}
+			if bs, err := json.Marshal(re); err == nil {
+				if _, err := writer.Write(bs); err != nil {
+					log.Println(err)
 				}
 			}
 		}()
-		var meta *HTTPMeta
-		meta, err = GetMetaFromURL(request.URL.Path)
+		meta, err := GetMetaFromURL(request.URL.Path)
 		if err != nil {
 			return
 		}
@@ -98,10 +97,6 @@ func (h *HTTPServer) run(ctx context.Context) error {
 			return
 		}
 		svc := sv.Get(meta.Version)
-
-		for k, v := range h.header {
-			writer.Header().Add(k, v)
-		}
 
 		result, err = svc.RunMethod(meta.Method, newContext(writer, request))
 	})
