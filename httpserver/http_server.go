@@ -55,7 +55,7 @@ func (h *HTTPServer) Register(svc service.Service) {
 		h.svc[svc.Name()].Put(svc)
 	}
 }
-func (h *HTTPServer) run(ctx context.Context) (err error) {
+func (h *HTTPServer) run(ctx context.Context) error {
 	h.svr = &http.Server{Addr: h.Address()}
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		var result []interface{}
@@ -87,7 +87,8 @@ func (h *HTTPServer) run(ctx context.Context) (err error) {
 				}
 			}
 		}()
-		meta, err := GetMetaFromURL(request.URL.Path)
+		var meta *HTTPMeta
+		meta, err = GetMetaFromURL(request.URL.Path)
 		if err != nil {
 			return
 		}
@@ -106,10 +107,10 @@ func (h *HTTPServer) run(ctx context.Context) (err error) {
 	})
 	h.isRun = true
 	log.Println("http server is start")
-	err = h.svr.ListenAndServe()
+	err := h.svr.ListenAndServe()
 	if err != nil {
 		h.isRun = false
 	}
 	ctx.Done()
-	return
+	return err
 }
