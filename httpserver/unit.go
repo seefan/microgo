@@ -12,7 +12,7 @@ import (
 // Unit
 type unit struct {
 	svr     reflect.Value
-	method  map[string]reflect.Value
+	method  map[string]func(entry service.Entry) interface{}
 	Version string
 	Name    string
 }
@@ -23,19 +23,22 @@ func (a *unit) resolve(s service.Service) {
 	a.svr = reflect.ValueOf(s)
 	t := reflect.TypeOf(s)
 	for i := 0; i < t.NumMethod(); i++ {
-		a.method[strings.ToLower(t.Method(i).Name)] = a.svr.MethodByName(t.Method(i).Name)
+		m := a.svr.MethodByName(t.Method(i).Name)
+		if f, ok := m.Interface().(func(service.Entry) interface{}); ok {
+			a.method[strings.ToLower(t.Method(i).Name)] = f
+		}
 	}
 }
 func NewUnit(s service.Service) *unit {
 	a := &unit{
-		method: make(map[string]reflect.Value),
+		method: make(map[string]func(entry service.Entry) interface{}),
 	}
 	a.resolve(s)
 	return a
 }
 
 // RunMethod run a method
-func (a *unit) RunMethod(name string, param ...interface{}) (re []interface{}, err error) {
+func (a *unit) RunMethod(name string, entry service.Entry) (re interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = errors.New("RuntimeError")
@@ -53,13 +56,6 @@ func (a *unit) RunMethod(name string, param ...interface{}) (re []interface{}, e
 		err = errors.New("MethodNotFound")
 		return
 	}
-	var in []reflect.Value
-	for _, v := range param {
-		in = append(in, reflect.ValueOf(v))
-	}
-	result := m.Call(in)
-	for _, r := range result {
-		re = append(re, r.Interface())
-	}
+	re = m(entry)
 	return
 }

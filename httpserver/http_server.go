@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
 	"log"
 	"net/http"
-	"strconv"
-
-	"github.com/seefan/microgo/server"
 )
 
 // HTTPServer for basic function
@@ -58,28 +56,21 @@ func (h *HTTPServer) Register(svc service.Service) {
 func (h *HTTPServer) run(ctx context.Context) error {
 	h.svr = &http.Server{Addr: h.Address()}
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		var result []interface{}
+		var result interface{}
 		var err error
 		defer func() {
 			re := make(map[string]interface{})
 			if err != nil {
 				re["error"] = err.Error()
-			}
-			if result != nil {
-				for i, v := range result {
-					if v != nil {
-						if e, ok := v.(error); ok && e != nil {
-							re["error"] = e.Error()
-						} else if i == 0 {
-							re["data"] = v
-						} else {
-							re["data"+strconv.Itoa(i)] = v
-						}
-					}
-				}
-				if _, ok := re["error"]; !ok {
+			} else if result != nil {
+				if e, ok := result.(error); ok && e != nil {
+					re["error"] = e.Error()
+				} else {
+					re["data"] = result
 					re["error"] = 0
 				}
+			} else {
+				re["error"] = 0
 			}
 			if bs, err := json.Marshal(re); err == nil {
 				if _, err := writer.Write(bs); err != nil {

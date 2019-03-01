@@ -7,7 +7,7 @@ import (
 type TestService struct {
 }
 
-func (TestService) Hello(entry service.Entry) string {
+func (TestService) Hello(entry service.Entry) interface{} {
 	name := entry.Get("name")
 	return "hello " + name
 }
