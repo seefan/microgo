@@ -55,6 +55,11 @@ func (h *HTTPServer) Register(svc service.Service) {
 }
 func (h *HTTPServer) run(ctx context.Context) error {
 	h.svr = &http.Server{Addr: h.Address()}
+	defer func() {
+		if h.CloseFunc != nil {
+			h.CloseFunc()
+		}
+	}()
 	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
 		var result interface{}
 		var err error
