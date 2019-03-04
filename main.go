@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	s := httpserver.NewHTTPServer("localhost", 8888)
+	s := httpserver.NewHTTPServer("localhost", 8889)
 	s.Register(&test.TestService{})
 	//if err := s.Start(context.Background()); err != nil {
 	//	println(err.Error())

@@ -61,7 +61,8 @@ func Run(r server.Runnable, outFile ...string) {
 					println(e.Error())
 				}
 			}
-		}, f, syscall.SIGINT, syscall.SIGKILL)
+		}, f, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
 	case "stop":
 		if err := stopByPidFile(pidFile); err != nil {
 			println(err.Error())
