@@ -3,6 +3,7 @@ package httpserver
 import (
 	"github.com/seefan/microgo/service"
 	"net/http"
+	"net/url"
 )
 
 // HTTPContext context
@@ -22,4 +23,11 @@ func newContext(writer http.ResponseWriter, request *http.Request) *HTTPContext 
 		c.Context = *service.NewContext(request.Form)
 	}
 	return c
+}
+
+// Set form param
+func (h *HTTPContext) SetForm(forms url.Values) {
+	for k, v := range forms {
+		h.SetSlice(k, v)
+	}
 }
