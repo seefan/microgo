@@ -1,20 +1,15 @@
 package httpserver
 
 import (
+	"github.com/seefan/microgo/service"
 	"net/http"
-	"net/url"
 )
 
 // HTTPContext context
 type HTTPContext struct {
-	forms    url.Values
+	service.Context
 	Request  *http.Request
 	Response http.ResponseWriter
-}
-
-// Get get on param
-func (h *HTTPContext) Set(forms url.Values) {
-	h.forms = forms
 }
 
 // NewContext new NewContext
@@ -24,25 +19,7 @@ func newContext(writer http.ResponseWriter, request *http.Request) *HTTPContext 
 		Response: writer,
 	}
 	if request.ParseForm() == nil {
-		c.forms = request.Form
+		c.Context = *service.NewContext(request.Form)
 	}
 	return c
-}
-
-// Get get on param
-func (h *HTTPContext) Get(name string) string {
-	if vs, ok := h.forms[name]; ok {
-		if len(vs) > 0 {
-			return vs[0]
-		}
-	}
-	return ""
-}
-
-// GetSlice get slice
-func (h *HTTPContext) GetSlice(name string) []string {
-	if vs, ok := h.forms[name]; ok {
-		return vs
-	}
-	return nil
 }

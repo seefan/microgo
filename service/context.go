@@ -5,9 +5,14 @@ type Context struct {
 }
 
 // NewContext new NewContext
-func NewContext() *Context {
+func New() *Context {
 	return &Context{
 		c: make(map[string][]string),
+	}
+}
+func NewContext(m map[string][]string) *Context {
+	return &Context{
+		c: m,
 	}
 }
 func (h *Context) Set(name, value string) {
