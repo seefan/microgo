@@ -26,6 +26,14 @@ func (h *Context) Get(name string) string {
 	}
 	return ""
 }
+func (h *Context) Value(name string) Value {
+	if vs, ok := h.c[name]; ok {
+		if len(vs) > 0 {
+			return Value(vs[0])
+		}
+	}
+	return ""
+}
 
 // GetSlice get slice
 func (h *Context) GetSlice(name string) []string {
