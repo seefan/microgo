@@ -1,7 +1,6 @@
 package ctx
 
 import (
-	"encoding/json"
 	"strconv"
 	"time"
 )
@@ -111,16 +110,4 @@ func (v Value) Bytes() []byte {
 //判断是否为空
 func (v Value) IsEmpty() bool {
 	return v == ""
-}
-
-//按json 转换指定类型
-//
-//  value 传入的指针
-//
-//示例
-//  var abc time.Time
-//  v.As(&abc)
-func (v Value) As(value interface{}) (err error) {
-	err = json.Unmarshal(v.Bytes(), value)
-	return
 }

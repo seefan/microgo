@@ -9,6 +9,7 @@ import (
 // HTTPContext context
 type HTTPContext struct {
 	form     url.Values
+	values   map[string]interface{}
 	Request  *http.Request
 	Response http.ResponseWriter
 }
@@ -18,6 +19,7 @@ func newContext(writer http.ResponseWriter, request *http.Request) *HTTPContext 
 	c := &HTTPContext{
 		Request:  request,
 		Response: writer,
+		values:   make(map[string]interface{}),
 	}
 	if request.ParseForm() == nil {
 		c.form = request.Form
@@ -55,4 +57,11 @@ func (h *HTTPContext) Value(name string) ctx.Value {
 // get param slice
 func (h *HTTPContext) Slice(name string) []string {
 	return h.form[name]
+}
+
+func (h *HTTPContext) Get(name string) interface{} {
+	return h.values[name]
+}
+func (h *HTTPContext) Set(name string, value interface{}) {
+	h.values[name] = value
 }

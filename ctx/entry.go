@@ -4,4 +4,6 @@ package ctx
 type Entry interface {
 	String(string) string
 	Value(string) Value
+	Get(string) interface{}
+	Set(string, interface{})
 }
