@@ -1,8 +1,7 @@
-package service
+package ctx
 
 // Entry common param
 type Entry interface {
-	Get(string) string
+	String(string) string
 	Value(string) Value
-	GetSlice(string) []string
 }
