@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
 	"log"
@@ -14,11 +15,12 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr    *http.Server
-	isRun  bool
-	header map[string]string
-	arch   map[string]*archive
-	prefix string
+	svr        *http.Server
+	isRun      bool
+	header     map[string]string
+	arch       map[string]*archive
+	prefix     string
+	NewContext func(*HTTPContext) ctx.Entry
 }
 
 // NewHTTPServer create new http server
@@ -31,6 +33,9 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			"Access-Control-Allow-Headers": "Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With",
 		},
 		arch: make(map[string]*archive),
+		NewContext: func(httpContext *HTTPContext) ctx.Entry {
+			return httpContext
+		},
 	}
 	hs.Server.Init(host, port)
 	return hs
@@ -119,7 +124,8 @@ func (h *HTTPServer) run(ctx context.Context) error {
 			return
 		}
 		svc := sv.Get(meta.Version)
-		c := newContext(writer, request)
+		nc := newContext(writer, request)
+		c := h.NewContext(nc)
 		if err = sv.RunWare(svc.Name, c, sv.begin); err != nil {
 			return
 		}
