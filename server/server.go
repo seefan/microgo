@@ -12,10 +12,11 @@ type Runnable interface {
 
 // Server for basic
 type Server struct {
-	Host     string
-	Port     int
-	Name     string
-	InitFunc func()
+	Host      string
+	Port      int
+	Name      string
+	InitFunc  func()
+	CloseFunc func()
 }
 
 // Init init server

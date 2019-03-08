@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"errors"
+	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/service"
 	"log"
 	"reflect"
@@ -11,8 +12,7 @@ import (
 
 // Unit
 type unit struct {
-	svr     reflect.Value
-	method  map[string]reflect.Value
+	method  map[string]func(entry ctx.Entry) interface{}
 	Version string
 	Name    string
 }
@@ -20,22 +20,25 @@ type unit struct {
 func (a *unit) resolve(s service.Service) {
 	a.Version = s.Version()
 	a.Name = s.Name()
-	a.svr = reflect.ValueOf(s)
+	svr := reflect.ValueOf(s)
 	t := reflect.TypeOf(s)
 	for i := 0; i < t.NumMethod(); i++ {
-		a.method[strings.ToLower(t.Method(i).Name)] = a.svr.MethodByName(t.Method(i).Name)
+		m := svr.MethodByName(t.Method(i).Name)
+		if f, ok := m.Interface().(func(ctx.Entry) interface{}); ok {
+			a.method[strings.ToLower(t.Method(i).Name)] = f
+		}
 	}
 }
 func NewUnit(s service.Service) *unit {
 	a := &unit{
-		method: make(map[string]reflect.Value),
+		method: make(map[string]func(entry ctx.Entry) interface{}),
 	}
 	a.resolve(s)
 	return a
 }
 
 // RunMethod run a method
-func (a *unit) RunMethod(name string, param ...interface{}) (re []interface{}, err error) {
+func (a *unit) RunMethod(name string, entry ctx.Entry) (re interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			err = errors.New("RuntimeError")
@@ -46,20 +49,12 @@ func (a *unit) RunMethod(name string, param ...interface{}) (re []interface{}, e
 				}
 			}
 		}
-
 	}()
 	m, ok := a.method[strings.ToLower(name)]
 	if !ok {
 		err = errors.New("MethodNotFound")
 		return
 	}
-	var in []reflect.Value
-	for _, v := range param {
-		in = append(in, reflect.ValueOf(v))
-	}
-	result := m.Call(in)
-	for _, r := range result {
-		re = append(re, r.Interface())
-	}
+	re = m(entry)
 	return
 }

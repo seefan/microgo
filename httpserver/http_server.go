@@ -4,39 +4,56 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/seefan/microgo/ctx"
+	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
 	"log"
 	"net/http"
-	"strconv"
-
-	"github.com/seefan/microgo/server"
+	"strings"
 )
 
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr    *http.Server
-	isRun  bool
-	header map[string]string
-	svc    map[string]*archive
+	svr        *http.Server
+	isRun      bool
+	header     map[string]string
+	arch       map[string]*archive
+	prefix     string
+	NewContext func(*HTTPContext) ctx.Entry
 }
 
 // NewHTTPServer create new http server
 func NewHTTPServer(host string, port int) *HTTPServer {
 	hs := &HTTPServer{
 		header: map[string]string{
+			"Content-Type":                 "application/json;charset=UTF-8",
 			"Access-Control-Allow-Origin":  "*",
 			"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
-			"Access-Control-Allow-Headers": "Origin, X-Requested-With, Content-Type, Accept, Connection, User-Agent, Cookie,token,uid",
+			"Access-Control-Allow-Headers": "Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With",
 		},
-		svc: make(map[string]*archive),
+		arch: make(map[string]*archive),
+		NewContext: func(httpContext *HTTPContext) ctx.Entry {
+			return httpContext
+		},
 	}
 	hs.Server.Init(host, port)
 	return hs
 }
 
+// Set common header
+func (h *HTTPServer) Header(name, value string) {
+	h.header[name] = value
+}
+
 // Start the server
 func (h *HTTPServer) Stop() error {
+	if h.CloseFunc != nil {
+		h.CloseFunc()
+	}
+	if h.isRun {
+		return h.svr.Close()
+	}
 	return nil
 }
 
@@ -47,43 +64,53 @@ func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	}
 	return h.run(ctx)
 }
-func (h *HTTPServer) Register(svc service.Service) {
-	if a, ok := h.svc[svc.Name()]; ok {
-		a.Put(svc)
-	} else {
-		h.svc[svc.Name()] = NewArchive()
-		h.svc[svc.Name()].Put(svc)
+func (h *HTTPServer) Register(svc service.Service, md ...service.Ware) {
+	if _, ok := h.arch[svc.Name()]; !ok {
+		h.arch[svc.Name()] = NewArchive()
+	}
+	h.arch[svc.Name()].Put(svc)
+	h.arch[svc.Name()].BeginWare(svc.Name(), md...)
+}
+func (h *HTTPServer) RegisterEndWard(svc string, md ...service.Ware) {
+	if _, ok := h.arch[svc]; ok {
+		h.arch[svc].EndWare(svc, md...)
 	}
 }
-func (h *HTTPServer) run(ctx context.Context) (err error) {
+func (h *HTTPServer) RegisterBeginWard(svc string, md ...service.Ware) {
+	if _, ok := h.arch[svc]; ok {
+		h.arch[svc].BeginWare(svc, md...)
+	}
+}
+func (h *HTTPServer) run(ctx context.Context) error {
 	h.svr = &http.Server{Addr: h.Address()}
-	http.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		var result []interface{}
+
+	http.HandleFunc(h.prefix+"/", func(writer http.ResponseWriter, request *http.Request) {
+		if strings.ToLower(request.Method) == "options" {
+			writer.WriteHeader(204)
+			return
+		}
+		for k, v := range h.header {
+			writer.Header().Set(k, v)
+		}
+		var result interface{}
 		var err error
 		defer func() {
 			re := make(map[string]interface{})
 			if err != nil {
 				re["error"] = err.Error()
-			}
-			if result != nil {
-				for i, v := range result {
-					if v != nil {
-						if e, ok := v.(error); ok && e != nil {
-							re["error"] = e.Error()
-						} else if i == 0 {
-							re["data"] = v
-						} else {
-							re["data"+strconv.Itoa(i)] = v
-						}
-					}
-				}
-				if _, ok := re["error"]; !ok {
+			} else if result != nil {
+				if e, ok := result.(error); ok && e != nil {
+					re["error"] = e.Error()
+				} else {
+					re["data"] = result
 					re["error"] = 0
 				}
-				if bs, err := json.Marshal(re); err == nil {
-					if _, err := writer.Write(bs); err != nil {
-						log.Println(err)
-					}
+			} else {
+				re["error"] = 0
+			}
+			if bs, err := json.Marshal(re); err == nil {
+				if _, err := writer.Write(bs); err != nil {
+					log.Println(err)
 				}
 			}
 		}()
@@ -91,25 +118,29 @@ func (h *HTTPServer) run(ctx context.Context) (err error) {
 		if err != nil {
 			return
 		}
-		sv, ok := h.svc[meta.Service]
+		sv, ok := h.arch[meta.Service]
 		if !ok {
 			err = errors.New("UnknownService")
 			return
 		}
 		svc := sv.Get(meta.Version)
-
-		for k, v := range h.header {
-			writer.Header().Add(k, v)
+		nc := newContext(writer, request)
+		c := h.NewContext(nc)
+		if err = sv.RunWare(svc.Name, c, sv.begin); err != nil {
+			return
 		}
-
-		result, err = svc.RunMethod(meta.Method, newContext(writer, request))
+		if result, err = svc.RunMethod(meta.Method, c); err != nil {
+			return
+		}
+		if err = sv.RunWare(svc.Name, c, sv.end); err != nil {
+			return
+		}
 	})
 	h.isRun = true
-	log.Println("http server is start")
-	err = h.svr.ListenAndServe()
+	err := h.svr.ListenAndServe()
 	if err != nil {
 		h.isRun = false
 	}
 	ctx.Done()
-	return
+	return err
 }
