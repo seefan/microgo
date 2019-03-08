@@ -11,7 +11,7 @@ func (TestService) Hello(entry ctx.Entry) interface{} {
 	name := entry.String("name")
 	return "hello " + name
 }
-func (TestService) Name() string {
+func (TestService) Path() string {
 	return "test"
 }
 func (TestService) Version() string {

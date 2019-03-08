@@ -2,6 +2,8 @@ package service
 
 // Service base service
 type Service interface {
+	//service version
 	Version() string
-	Name() string
+	//Based on this url
+	Path() string
 }

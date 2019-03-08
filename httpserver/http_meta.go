@@ -1,9 +1,8 @@
 package httpserver
 
-import (
-	"errors"
-	"strings"
-)
+import "errors"
+
+var Skip = 0
 
 // HTTPMeta service
 type HTTPMeta struct {
@@ -14,9 +13,24 @@ type HTTPMeta struct {
 
 // GetMetaFromURL get meta from url
 func GetMetaFromURL(url string) (*HTTPMeta, error) {
-	us := strings.Split(url, "/")
-	if len(us) == 4 {
-		return &HTTPMeta{us[1], us[2], us[3]}, nil
+	pos := make([]int, 2)
+	idx := 0
+	size := len(url)
+	if url[size-1] == '/' {
+		size--
 	}
-	return nil, errors.New("WrongURL")
+	for i := size - 1; i >= 0; i-- {
+		if url[i] == '/' {
+			pos[idx] = i
+			idx++
+		}
+
+		if idx == 2 {
+			break
+		}
+	}
+	if idx != 2 {
+		return nil, errors.New("WrongURL")
+	}
+	return &HTTPMeta{url[:pos[1]], url[pos[1]+1 : pos[0]], url[pos[0]+1 : size]}, nil
 }

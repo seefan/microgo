@@ -19,7 +19,7 @@ type HTTPServer struct {
 	isRun      bool
 	header     map[string]string
 	arch       map[string]*archive
-	prefix     string
+	Prefix     string
 	NewContext func(*HTTPContext) ctx.Entry
 }
 
@@ -65,26 +65,28 @@ func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	return h.run(ctx)
 }
 func (h *HTTPServer) Register(svc service.Service, md ...service.Ware) {
-	if _, ok := h.arch[svc.Name()]; !ok {
-		h.arch[svc.Name()] = NewArchive()
+	path := h.Prefix + "/" + svc.Path()
+	if _, ok := h.arch[path]; !ok {
+		h.arch[path] = NewArchive()
 	}
-	h.arch[svc.Name()].Put(svc)
-	h.arch[svc.Name()].BeginWare(svc.Name(), md...)
+	h.arch[path].Put(svc)
+	h.arch[path].BeginWare(svc, md...)
 }
-func (h *HTTPServer) RegisterEndWard(svc string, md ...service.Ware) {
-	if _, ok := h.arch[svc]; ok {
-		h.arch[svc].EndWare(svc, md...)
+func (h *HTTPServer) RegisterEndWard(svc service.Service, md ...service.Ware) {
+	path := h.Prefix + "/" + svc.Path()
+	if _, ok := h.arch[path]; ok {
+		h.arch[path].EndWare(svc, md...)
 	}
 }
-func (h *HTTPServer) RegisterBeginWard(svc string, md ...service.Ware) {
-	if _, ok := h.arch[svc]; ok {
-		h.arch[svc].BeginWare(svc, md...)
+func (h *HTTPServer) RegisterBeginWard(svc service.Service, md ...service.Ware) {
+	path := h.Prefix + "/" + svc.Path()
+	if _, ok := h.arch[path]; ok {
+		h.arch[path].BeginWare(svc, md...)
 	}
 }
 func (h *HTTPServer) run(ctx context.Context) error {
 	h.svr = &http.Server{Addr: h.Address()}
-
-	http.HandleFunc(h.prefix+"/", func(writer http.ResponseWriter, request *http.Request) {
+	http.HandleFunc(h.Prefix+"/", func(writer http.ResponseWriter, request *http.Request) {
 		if strings.ToLower(request.Method) == "options" {
 			writer.WriteHeader(204)
 			return
@@ -126,13 +128,13 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		svc := sv.Get(meta.Version)
 		nc := newContext(writer, request)
 		c := h.NewContext(nc)
-		if err = sv.RunWare(svc.Name, c, sv.begin); err != nil {
+		if err = runWare(svc.Version, c, sv.begin); err != nil {
 			return
 		}
 		if result, err = svc.RunMethod(meta.Method, c); err != nil {
 			return
 		}
-		if err = sv.RunWare(svc.Name, c, sv.end); err != nil {
+		if err = runWare(svc.Version, c, sv.end); err != nil {
 			return
 		}
 	})

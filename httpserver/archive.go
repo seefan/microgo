@@ -14,9 +14,9 @@ import (
 type archive struct {
 	defaultUnit    *unit
 	defaultVersion string
-	svc            map[string]*unit
-	begin          map[string][]service.Ware
-	end            map[string][]service.Ware
+	svc            map[string]*unit          //version:service
+	begin          map[string][]service.Ware //version:ware
+	end            map[string][]service.Ware //version:ware
 }
 
 func NewArchive() *archive {
@@ -28,24 +28,24 @@ func NewArchive() *archive {
 }
 
 func (a *archive) Put(sv service.Service) {
-	a.svc[sv.Name()] = NewUnit(sv)
+	a.svc[sv.Path()] = NewUnit(sv)
 	if a.defaultVersion < sv.Version() {
 		a.defaultVersion = sv.Version()
-		a.defaultUnit = a.svc[sv.Name()]
+		a.defaultUnit = a.svc[sv.Path()]
 	}
 }
-func (a *archive) BeginWare(name string, mid ...service.Ware) {
-	if ms, ok := a.begin[name]; ok {
-		a.begin[name] = append(ms, mid...)
+func (a *archive) BeginWare(svc service.Service, mid ...service.Ware) {
+	if ms, ok := a.begin[svc.Version()]; ok {
+		a.begin[svc.Version()] = append(ms, mid...)
 	} else {
-		a.begin[name] = mid
+		a.begin[svc.Version()] = mid
 	}
 }
-func (a *archive) EndWare(name string, mid ...service.Ware) {
-	if ms, ok := a.begin[name]; ok {
-		a.end[name] = append(ms, mid...)
+func (a *archive) EndWare(svc service.Service, mid ...service.Ware) {
+	if ms, ok := a.begin[svc.Version()]; ok {
+		a.end[svc.Version()] = append(ms, mid...)
 	} else {
-		a.end[name] = mid
+		a.end[svc.Version()] = mid
 	}
 }
 func (a *archive) Get(v string) *unit {
@@ -56,8 +56,8 @@ func (a *archive) Get(v string) *unit {
 	}
 }
 
-func (a *archive) RunWare(name string, c ctx.Entry, wm map[string][]service.Ware) (err error) {
-	if ms, ok := wm[name]; ok {
+func runWare(version string, c ctx.Entry, wm map[string][]service.Ware) (err error) {
+	if ms, ok := wm[version]; ok {
 		for _, m := range ms {
 			if m.Next != nil {
 				err = m.Next(c)

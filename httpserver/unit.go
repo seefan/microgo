@@ -14,12 +14,16 @@ import (
 type unit struct {
 	method  map[string]func(entry ctx.Entry) interface{}
 	Version string
-	Name    string
+	Path    string
 }
 
 func (a *unit) resolve(s service.Service) {
 	a.Version = s.Version()
-	a.Name = s.Name()
+	if strings.HasPrefix(s.Path(), "/") {
+		a.Path = s.Path()[1:]
+	} else {
+		a.Path = s.Path()
+	}
 	svr := reflect.ValueOf(s)
 	t := reflect.TypeOf(s)
 	for i := 0; i < t.NumMethod(); i++ {
