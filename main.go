@@ -12,7 +12,7 @@ import (
 func main() {
 	s := httpserver.NewHTTPServer("localhost", 8889)
 	s.Prefix = "/svr"
-	s.Register(&test.TestService{}, service.Ware{Next: func(entry ctx.Entry) (err error) {
+	s.Register(&test.TestService{}).Before(service.Ware{Next: func(entry ctx.Entry) (err error) {
 		name := entry.String("name")
 		if name != "jack" {
 			err = errors.New("not login")

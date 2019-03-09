@@ -7,6 +7,7 @@ import (
 	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -15,12 +16,13 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr        *http.Server
-	isRun      bool
-	header     map[string]string
-	arch       map[string]*archive
-	Prefix     string
-	NewContext func(*HTTPContext) ctx.Entry
+	svr          *http.Server
+	isRun        bool
+	header       map[string]string
+	arch         map[string]*archive
+	Prefix       string
+	NewContext   func(*HTTPContext) ctx.Entry
+	OutputWriter func(result interface{}, w io.Writer)
 }
 
 // NewHTTPServer create new http server
@@ -35,6 +37,13 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 		arch: make(map[string]*archive),
 		NewContext: func(httpContext *HTTPContext) ctx.Entry {
 			return httpContext
+		},
+		OutputWriter: func(result interface{}, w io.Writer) {
+			if bs, err := json.Marshal(result); err == nil {
+				if _, err := w.Write(bs); err != nil {
+					log.Println(err)
+				}
+			}
 		},
 	}
 	hs.Server.Init(host, port)
@@ -64,24 +73,32 @@ func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	}
 	return h.run(ctx)
 }
-func (h *HTTPServer) Register(svc service.Service, md ...service.Ware) {
+func (h *HTTPServer) Register(svc service.Service) *archive {
 	path := h.Prefix + "/" + svc.Path()
 	if _, ok := h.arch[path]; !ok {
 		h.arch[path] = NewArchive()
 	}
 	h.arch[path].Put(svc)
-	h.arch[path].BeginWare(svc, md...)
+	return h.arch[path]
 }
-func (h *HTTPServer) RegisterEndWard(svc service.Service, md ...service.Ware) {
+
+// only register ware
+func (h *HTTPServer) RegisterAfterWare(svc service.Service, md ...service.Ware) {
 	path := h.Prefix + "/" + svc.Path()
 	if _, ok := h.arch[path]; ok {
-		h.arch[path].EndWare(svc, md...)
+		for _, m := range md {
+			h.arch[path].After(m)
+		}
 	}
 }
-func (h *HTTPServer) RegisterBeginWard(svc service.Service, md ...service.Ware) {
+
+// only register ware
+func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware) {
 	path := h.Prefix + "/" + svc.Path()
 	if _, ok := h.arch[path]; ok {
-		h.arch[path].BeginWare(svc, md...)
+		for _, m := range md {
+			h.arch[path].Before(m)
+		}
 	}
 }
 func (h *HTTPServer) run(ctx context.Context) error {
@@ -110,11 +127,7 @@ func (h *HTTPServer) run(ctx context.Context) error {
 			} else {
 				re["error"] = 0
 			}
-			if bs, err := json.Marshal(re); err == nil {
-				if _, err := writer.Write(bs); err != nil {
-					log.Println(err)
-				}
-			}
+			h.OutputWriter(re, writer)
 		}()
 		meta, err := GetMetaFromURL(request.URL.Path)
 		if err != nil {
@@ -128,13 +141,13 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		svc := sv.Get(meta.Version)
 		nc := newContext(writer, request)
 		c := h.NewContext(nc)
-		if err = runWare(svc.Version, c, sv.begin); err != nil {
+		if err = runWare(svc.Version, c, sv.before); err != nil {
 			return
 		}
 		if result, err = svc.RunMethod(meta.Method, c); err != nil {
 			return
 		}
-		if err = runWare(svc.Version, c, sv.end); err != nil {
+		if err = runWare(svc.Version, c, sv.after); err != nil {
 			return
 		}
 	})
