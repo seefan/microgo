@@ -16,13 +16,13 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr          *http.Server
-	isRun        bool
-	header       map[string]string
-	arch         map[string]*archive
-	Prefix       string
-	NewContext   func(*HTTPContext) ctx.Entry
-	OutputWriter func(result interface{}, w io.Writer)
+	svr     *http.Server
+	isRun   bool
+	header  map[string]string
+	arch    map[string]*archive
+	Prefix  string
+	Context func(*HTTPContext) ctx.Entry
+	Output  func(result interface{}, err error, w io.Writer)
 }
 
 // NewHTTPServer create new http server
@@ -35,11 +35,24 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			"Access-Control-Allow-Headers": "Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With",
 		},
 		arch: make(map[string]*archive),
-		NewContext: func(httpContext *HTTPContext) ctx.Entry {
+		Context: func(httpContext *HTTPContext) ctx.Entry {
 			return httpContext
 		},
-		OutputWriter: func(result interface{}, w io.Writer) {
-			if bs, err := json.Marshal(result); err == nil {
+		Output: func(result interface{}, err error, w io.Writer) {
+			re := make(map[string]interface{})
+			if err != nil {
+				re["error"] = err.Error()
+			} else if result != nil {
+				if e, ok := result.(error); ok && e != nil {
+					re["error"] = e.Error()
+				} else {
+					re["data"] = result
+					re["error"] = 0
+				}
+			} else {
+				re["error"] = 0
+			}
+			if bs, err := json.Marshal(re); err == nil {
 				if _, err := w.Write(bs); err != nil {
 					log.Println(err)
 				}
@@ -114,20 +127,7 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		var result interface{}
 		var err error
 		defer func() {
-			re := make(map[string]interface{})
-			if err != nil {
-				re["error"] = err.Error()
-			} else if result != nil {
-				if e, ok := result.(error); ok && e != nil {
-					re["error"] = e.Error()
-				} else {
-					re["data"] = result
-					re["error"] = 0
-				}
-			} else {
-				re["error"] = 0
-			}
-			h.OutputWriter(re, writer)
+			h.Output(result, err, writer)
 		}()
 		meta, err := GetMetaFromURL(request.URL.Path)
 		if err != nil {
@@ -140,7 +140,7 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		}
 		svc := sv.Get(meta.Version)
 		nc := newContext(writer, request)
-		c := h.NewContext(nc)
+		c := h.Context(nc)
 		if err = runWare(svc.Version, c, sv.before); err != nil {
 			return
 		}

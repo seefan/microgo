@@ -2,9 +2,9 @@ package httpserver
 
 import (
 	"errors"
+	"github.com/seefan/goerr"
 	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/service"
-	"log"
 	"reflect"
 	"runtime"
 	"strings"
@@ -45,12 +45,10 @@ func NewUnit(s service.Service) *unit {
 func (a *unit) RunMethod(name string, entry ctx.Entry) (re interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			err = errors.New("RuntimeError")
-			for i := 0; i < 10; i++ {
-				funcName, file, line, ok := runtime.Caller(i)
-				if ok {
-					log.Printf("[func:%v,file:%v,line:%v]\n", runtime.FuncForPC(funcName).Name(), file, line)
-				}
+			ne := goerr.String("RuntimeError")
+			_, file, line, ok := runtime.Caller(3)
+			if ok {
+				err = ne.Line(line).File(file)
 			}
 		}
 	}()
