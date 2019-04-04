@@ -45,10 +45,17 @@ func NewUnit(s service.Service) *unit {
 func (a *unit) RunMethod(name string, entry ctx.Entry) (re interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			ne := goerr.String("RuntimeError")
-			_, file, line, ok := runtime.Caller(3)
-			if ok {
-				err = ne.Line(line).File(file)
+			ne := goerr.String("RuntimeError:%s", e)
+			get := false
+			for i := 0; i < 10; i++ {
+				if fp, f1, l, ok := runtime.Caller(i); ok {
+					if get {
+						ne.AttachE(goerr.String(runtime.FuncForPC(fp).Name()).File(f1).Line(l))
+					}
+					if strings.Index(f1, "github.com/seefan/microgo/httpserver/unit.go") != -1 {
+						get = true
+					}
+				}
 			}
 		}
 	}()

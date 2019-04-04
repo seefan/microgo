@@ -16,13 +16,14 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr     *http.Server
-	isRun   bool
-	header  map[string]string
-	arch    map[string]*archive
-	Prefix  string
-	Context func(*HTTPContext) ctx.Entry
-	Output  func(result interface{}, err error, w io.Writer)
+	svr         *http.Server
+	isRun       bool
+	header      map[string]string
+	arch        map[string]*archive
+	Prefix      string
+	Context     func(*HTTPContext) ctx.Entry
+	Output      func(result interface{}, err error, w io.Writer)
+	BuildResult func(result interface{}, err error) interface{}
 }
 
 // NewHTTPServer create new http server
@@ -38,7 +39,7 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 		Context: func(httpContext *HTTPContext) ctx.Entry {
 			return httpContext
 		},
-		Output: func(result interface{}, err error, w io.Writer) {
+		BuildResult: func(result interface{}, err error) interface{} {
 			re := make(map[string]interface{})
 			if err != nil {
 				re["error"] = err.Error()
@@ -52,12 +53,16 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			} else {
 				re["error"] = 0
 			}
-			if bs, err := json.Marshal(re); err == nil {
-				if _, err := w.Write(bs); err != nil {
-					log.Println(err)
-				}
-			}
+			return re
 		},
+	}
+	hs.Output = func(result interface{}, err error, w io.Writer) {
+		re := hs.BuildResult(result, err)
+		if bs, err := json.Marshal(re); err == nil {
+			if _, err := w.Write(bs); err != nil {
+				log.Println(err)
+			}
+		}
 	}
 	hs.Server.Init(host, port)
 	return hs
