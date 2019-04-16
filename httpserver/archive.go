@@ -7,34 +7,46 @@
 package httpserver
 
 import (
+	"errors"
+	"github.com/seefan/goerr"
 	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/service"
+	"runtime"
+	"strings"
 )
 
 type archive struct {
-	defaultUnit    *unit
-	defaultVersion string
-	currentVersion string
-	svc            map[string]*unit          //version:service
-	before         map[string][]service.Ware //version:ware
-	after          map[string][]service.Ware //version:ware
+	defaultMethodVersion map[string]string
+	currentVersion       string
+	svc                  map[string]*unit          //version:service
+	method               map[string]Method         //version:method
+	before               map[string][]service.Ware //version:ware
+	after                map[string][]service.Ware //version:ware
 }
 
 func NewArchive() *archive {
 	return &archive{
-		svc:    make(map[string]*unit),
-		before: make(map[string][]service.Ware),
-		after:  make(map[string][]service.Ware),
+		svc:                  make(map[string]*unit),
+		defaultMethodVersion: make(map[string]string),
+		method:               make(map[string]Method),
+		before:               make(map[string][]service.Ware),
+		after:                make(map[string][]service.Ware),
 	}
 }
 
 // set service and version
 func (a *archive) Put(sv service.Service) {
-	a.svc[sv.Path()] = NewUnit(sv)
+	t := newUnit(sv)
+	a.svc[sv.Path()] = t
 	a.currentVersion = sv.Version()
-	if a.defaultVersion < sv.Version() {
-		a.defaultVersion = sv.Version()
-		a.defaultUnit = a.svc[sv.Path()]
+	for name, f := range t.method {
+		if _, ok := a.method[name]; !ok {
+			a.method[name] = make(Method)
+		}
+		a.method[name][sv.Version()] = f
+		if v, ok := a.defaultMethodVersion[name]; !ok || sv.Version() > v {
+			a.defaultMethodVersion[name] = sv.Version()
+		}
 	}
 }
 
@@ -68,13 +80,40 @@ func (a *archive) After(mid service.Ware, svc ...service.Service) {
 	}
 }
 
-// get service
-func (a *archive) Get(v string) *unit {
-	if sv, ok := a.svc[v]; ok {
-		return sv
-	} else {
-		return a.defaultUnit
+// get method
+func (a *archive) getMethod(name, v string) (func(ctx.Entry) interface{}, error) {
+	if mv, ok := a.method[name]; ok {
+		if m, ok := mv[v]; ok {
+			return m, nil
+		} else {
+			return mv[a.defaultMethodVersion[name]], nil
+		}
 	}
+	return nil, errors.New("MethodNotFound")
+}
+
+// RunMethod run a method
+func (a *archive) runMethod(name, version string, entry ctx.Entry) (re interface{}, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			ne := goerr.String("RuntimeError:%s", e)
+			get := false
+			for i := 0; i < 10; i++ {
+				if fp, f1, l, ok := runtime.Caller(i); ok {
+					if get {
+						ne.AttachE(goerr.String(runtime.FuncForPC(fp).Name()).File(f1).Line(l))
+					}
+					if strings.Index(f1, "github.com/seefan/microgo/httpserver/unit.go") != -1 {
+						get = true
+					}
+				}
+			}
+		}
+	}()
+	if m, err := a.getMethod(strings.ToLower(name), version); err == nil {
+		re = m(entry)
+	}
+	return
 }
 
 // run ware

@@ -1,8 +1,18 @@
 package httpserver
 
-import "errors"
+import (
+	"errors"
+	"sync"
+)
 
-var Skip = 0
+var (
+	Skip     = 0
+	poolMeta = &sync.Pool{
+		New: func() interface{} {
+			return new(HTTPMeta)
+		},
+	}
+)
 
 // HTTPMeta service
 type HTTPMeta struct {
@@ -11,14 +21,15 @@ type HTTPMeta struct {
 	Method  string
 }
 
+func putMeta(meta *HTTPMeta) {
+	poolMeta.Put(meta)
+}
+
 // GetMetaFromURL get meta from url
 func GetMetaFromURL(url string) (*HTTPMeta, error) {
 	pos := make([]int, 2)
 	idx := 0
 	size := len(url)
-	if url[size-1] == '/' {
-		size--
-	}
 	for i := size - 1; i >= 0; i-- {
 		if url[i] == '/' {
 			pos[idx] = i
@@ -32,5 +43,9 @@ func GetMetaFromURL(url string) (*HTTPMeta, error) {
 	if idx != 2 {
 		return nil, errors.New("WrongURL")
 	}
-	return &HTTPMeta{url[:pos[1]], url[pos[1]+1 : pos[0]], url[pos[0]+1 : size]}, nil
+	m := poolMeta.Get().(*HTTPMeta)
+	m.Service = url[:pos[1]]
+	m.Version = url[pos[0]+1 : size]
+	m.Method = url[pos[1]+1 : pos[0]]
+	return m, nil
 }

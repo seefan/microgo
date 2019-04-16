@@ -19,6 +19,7 @@ func main() {
 		}
 		return
 	}})
+	s.Register(&test.TestService1{})
 	//if err := s.Start(context.Background()); err != nil {
 	//	println(err.Error())
 	//}

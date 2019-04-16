@@ -16,10 +16,15 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr         *http.Server
-	isRun       bool
-	header      map[string]string
-	arch        map[string]*archive
+	svr   *http.Server
+	isRun bool
+	//common header
+	header map[string]string
+	//path:service
+	arch map[string]*archive
+	//doc path
+	docOnline string
+	//common prefix
 	Prefix      string
 	Context     func(*HTTPContext) ctx.Entry
 	Output      func(result interface{}, err error, w io.Writer)
@@ -35,7 +40,8 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			"Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 			"Access-Control-Allow-Headers": "Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With",
 		},
-		arch: make(map[string]*archive),
+		docOnline: "/doc",
+		arch:      make(map[string]*archive),
 		Context: func(httpContext *HTTPContext) ctx.Entry {
 			return httpContext
 		},
@@ -92,7 +98,13 @@ func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	return h.run(ctx)
 }
 func (h *HTTPServer) Register(svc service.Service) *archive {
-	path := h.Prefix + "/" + svc.Path()
+	var path string
+	if strings.HasPrefix(svc.Path(), "/") {
+		path = h.Prefix + svc.Path()
+	} else {
+		path = h.Prefix + "/" + svc.Path()
+	}
+
 	if _, ok := h.arch[path]; !ok {
 		h.arch[path] = NewArchive()
 	}
@@ -111,6 +123,11 @@ func (h *HTTPServer) RegisterAfterWare(svc service.Service, md ...service.Ware) 
 }
 
 // only register ware
+func (h *HTTPServer) SetDocPath(path string) {
+	h.docOnline = path
+}
+
+// only register ware
 func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware) {
 	path := h.Prefix + "/" + svc.Path()
 	if _, ok := h.arch[path]; ok {
@@ -121,6 +138,9 @@ func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware)
 }
 func (h *HTTPServer) run(ctx context.Context) error {
 	h.svr = &http.Server{Addr: h.Address()}
+	if h.docOnline != "" {
+		http.HandleFunc(h.docOnline, h.handleDoc)
+	}
 	http.HandleFunc(h.Prefix+"/", func(writer http.ResponseWriter, request *http.Request) {
 		if strings.ToLower(request.Method) == "options" {
 			writer.WriteHeader(204)
@@ -131,28 +151,30 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		}
 		var result interface{}
 		var err error
-		defer func() {
-			h.Output(result, err, writer)
-		}()
+
 		meta, err := GetMetaFromURL(request.URL.Path)
 		if err != nil {
 			return
 		}
+		defer func() {
+			putMeta(meta)
+			h.Output(result, err, writer)
+		}()
 		sv, ok := h.arch[meta.Service]
 		if !ok {
 			err = errors.New("UnknownService")
 			return
 		}
-		svc := sv.Get(meta.Version)
+
 		nc := newContext(writer, request)
 		c := h.Context(nc)
-		if err = runWare(svc.Version, c, sv.before); err != nil {
+		if err = runWare(meta.Version, c, sv.before); err != nil {
 			return
 		}
-		if result, err = svc.RunMethod(meta.Method, c); err != nil {
+		if result, err = sv.runMethod(meta.Method, meta.Version, c); err != nil {
 			return
 		}
-		if err = runWare(svc.Version, c, sv.after); err != nil {
+		if err = runWare(meta.Version, c, sv.after); err != nil {
 			return
 		}
 	})
