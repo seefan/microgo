@@ -103,11 +103,12 @@ func (a *archive) runMethod(name, version string, entry ctx.Entry) (re interface
 					if get {
 						ne.AttachE(goerr.String(runtime.FuncForPC(fp).Name()).File(f1).Line(l))
 					}
-					if strings.Index(f1, "github.com/seefan/microgo/httpserver/unit.go") != -1 {
+					if strings.Index(f1, "github.com/seefan/microgo/httpserver/archive.go") != -1 {
 						get = true
 					}
 				}
 			}
+			err = ne
 		}
 	}()
 	if m, err := a.getMethod(strings.ToLower(name), version); err == nil {
