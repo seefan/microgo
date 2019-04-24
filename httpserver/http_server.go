@@ -3,7 +3,7 @@ package httpserver
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"github.com/seefan/goerr"
 	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
@@ -162,7 +162,7 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		}()
 		sv, ok := h.arch[meta.Service]
 		if !ok {
-			err = errors.New("UnknownService")
+			err = goerr.Errorf(goerr.String("Service:%s Method:%s Version:%s", meta.Service, meta.Method, meta.Version), "UnknownService")
 			return
 		}
 

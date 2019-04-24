@@ -7,7 +7,6 @@
 package httpserver
 
 import (
-	"errors"
 	"github.com/seefan/goerr"
 	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/service"
@@ -89,7 +88,7 @@ func (a *archive) getMethod(name, v string) (func(ctx.Entry) interface{}, error)
 			return mv[a.defaultMethodVersion[name]], nil
 		}
 	}
-	return nil, errors.New("MethodNotFound")
+	return nil, goerr.String("MethodNotFound", name, v)
 }
 
 // RunMethod run a method
@@ -111,10 +110,15 @@ func (a *archive) runMethod(name, version string, entry ctx.Entry) (re interface
 			err = ne
 		}
 	}()
-	if m, err := a.getMethod(strings.ToLower(name), version); err == nil {
-		re = m(entry)
+
+	if mv, ok := a.method[strings.ToLower(name)]; ok {
+		if m, ok := mv[version]; ok {
+			return m, nil
+		} else {
+			return mv[a.defaultMethodVersion[name]], nil
+		}
 	}
-	return
+	return nil, goerr.Errorf(goerr.String("Method:%s Version:%s", name, version), "MethodNotFound")
 }
 
 // run ware
