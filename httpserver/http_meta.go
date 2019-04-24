@@ -26,7 +26,7 @@ func putMeta(meta *HTTPMeta) {
 }
 
 // GetMetaFromURL get meta from url
-func GetMetaFromURL(url string) (*HTTPMeta, error) {
+func getMetaFromURL(url string) (*HTTPMeta, error) {
 	pos := make([]int, 2)
 	idx := 0
 	size := len(url)

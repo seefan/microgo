@@ -152,7 +152,7 @@ func (h *HTTPServer) run(ctx context.Context) error {
 		var result interface{}
 		var err error
 
-		meta, err := GetMetaFromURL(request.URL.Path)
+		meta, err := getMetaFromURL(request.URL.Path)
 		if err != nil {
 			return
 		}
