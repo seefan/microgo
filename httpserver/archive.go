@@ -113,9 +113,9 @@ func (a *archive) runMethod(name, version string, entry ctx.Entry) (re interface
 
 	if mv, ok := a.method[strings.ToLower(name)]; ok {
 		if m, ok := mv[version]; ok {
-			return m, nil
+			return m(entry), nil
 		} else {
-			return mv[a.defaultMethodVersion[name]], nil
+			return mv[a.defaultMethodVersion[name]](entry), nil
 		}
 	}
 	return nil, goerr.Errorf(goerr.String("Method:%s Version:%s", name, version), "MethodNotFound")
