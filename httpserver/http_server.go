@@ -8,7 +8,6 @@ import (
 	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
 	"io"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -25,10 +24,15 @@ type HTTPServer struct {
 	//doc path
 	docOnline string
 	//common prefix
-	Prefix      string
-	Context     func(*HTTPContext) ctx.Entry
-	Output      func(result interface{}, err error, w io.Writer)
+	Prefix string
+	//method context
+	Context func(*HTTPContext) ctx.Entry
+	//output format
+	Output func(result interface{}, err error, w io.Writer)
+	//result format
 	BuildResult func(result interface{}, err error) interface{}
+	//log
+	RuntimeLog func(err error)
 }
 
 // NewHTTPServer create new http server
@@ -45,28 +49,32 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 		Context: func(httpContext *HTTPContext) ctx.Entry {
 			return httpContext
 		},
-		BuildResult: func(result interface{}, err error) interface{} {
-			re := make(map[string]interface{})
-			if err != nil {
-				re["error"] = err.Error()
-			} else if result != nil {
-				if e, ok := result.(error); ok && e != nil {
-					re["error"] = e.Error()
-				} else {
-					re["data"] = result
-					re["error"] = 0
-				}
+		RuntimeLog: func(err error) {
+			//do nothing
+		},
+	}
+	hs.BuildResult = func(result interface{}, err error) interface{} {
+		re := make(map[string]interface{})
+		if err != nil {
+			hs.RuntimeLog(err)
+			re["error"] = err.Error()
+		} else if result != nil {
+			if e, ok := result.(error); ok && e != nil {
+				re["error"] = e.Error()
 			} else {
+				re["data"] = result
 				re["error"] = 0
 			}
-			return re
-		},
+		} else {
+			re["error"] = 0
+		}
+		return re
 	}
 	hs.Output = func(result interface{}, err error, w io.Writer) {
 		re := hs.BuildResult(result, err)
 		if bs, err := json.Marshal(re); err == nil {
 			if _, err := w.Write(bs); err != nil {
-				log.Println(err)
+				hs.RuntimeLog(err)
 			}
 		}
 	}
