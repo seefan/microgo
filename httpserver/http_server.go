@@ -15,22 +15,33 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
-	svr   *http.Server
 	isRun bool
+	//Debug output debug info
+	Debug bool
+	//doc path
+	docOnline string
+	//static file
+	staticPath string
+	//static file
+	staticDir string
+	//common prefix
+	Prefix string
+	//server
+	svr *http.Server
+	//mux
+	//mux *http.ServeMux
+
 	//common header
 	header map[string]string
 	//path:service
 	arch map[string]*archive
-	//doc path
-	docOnline string
-	//common prefix
-	Prefix string
+
 	//method context
 	Context func(*HTTPContext) ctx.Entry
-	//output format
-	Output func(result interface{}, err error, w io.Writer)
+	//Marshal format
+	Marshal func(result interface{}, err error, w io.Writer)
 	//result format
-	BuildResult func(result interface{}, err error) interface{}
+	Result func(result interface{}, err error) interface{}
 	//log
 	RuntimeLog func(err error)
 }
@@ -53,11 +64,16 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			//do nothing
 		},
 	}
-	hs.BuildResult = func(result interface{}, err error) interface{} {
+	hs.Result = func(result interface{}, err error) interface{} {
 		re := make(map[string]interface{})
 		if err != nil {
 			hs.RuntimeLog(err)
-			re["error"] = err.Error()
+			if hs.Debug {
+				re["error"] = goerr.Error(err).Trace()
+			} else {
+				re["error"] = err.Error()
+			}
+
 		} else if result != nil {
 			if e, ok := result.(error); ok && e != nil {
 				re["error"] = e.Error()
@@ -70,12 +86,14 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 		}
 		return re
 	}
-	hs.Output = func(result interface{}, err error, w io.Writer) {
-		re := hs.BuildResult(result, err)
+	hs.Marshal = func(result interface{}, err error, w io.Writer) {
+		re := hs.Result(result, err)
 		if bs, err := json.Marshal(re); err == nil {
 			if _, err := w.Write(bs); err != nil {
 				hs.RuntimeLog(err)
 			}
+		} else {
+			hs.RuntimeLog(err)
 		}
 	}
 	hs.Server.Init(host, port)
@@ -89,10 +107,12 @@ func (h *HTTPServer) Header(name, value string) {
 
 // Start the server
 func (h *HTTPServer) Stop() error {
-	if h.CloseFunc != nil {
-		h.CloseFunc()
-	}
 	if h.isRun {
+		h.isRun = false
+		h.svr.Shutdown()
+		if h.CloseFunc != nil {
+			h.CloseFunc()
+		}
 		return h.svr.Close()
 	}
 	return nil
@@ -105,14 +125,19 @@ func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	}
 	return h.run(ctx)
 }
-func (h *HTTPServer) Register(svc service.Service) *archive {
-	var path string
-	if strings.HasPrefix(svc.Path(), "/") {
-		path = h.Prefix + svc.Path()
+func (h *HTTPServer) getPath(p string) (path string) {
+	if strings.HasPrefix(p, "/") {
+		path = h.Prefix + p
 	} else {
-		path = h.Prefix + "/" + svc.Path()
+		path = h.Prefix + "/" + p
 	}
-
+	if !strings.HasSuffix(path, "/") {
+		path += "/"
+	}
+	return
+}
+func (h *HTTPServer) Register(svc service.Service) *archive {
+	path := h.getPath(svc.Path())
 	if _, ok := h.arch[path]; !ok {
 		h.arch[path] = NewArchive()
 	}
@@ -122,7 +147,7 @@ func (h *HTTPServer) Register(svc service.Service) *archive {
 
 // only register ware
 func (h *HTTPServer) RegisterAfterWare(svc service.Service, md ...service.Ware) {
-	path := h.Prefix + "/" + svc.Path()
+	path := h.getPath(svc.Path())
 	if _, ok := h.arch[path]; ok {
 		for _, m := range md {
 			h.arch[path].After(m)
@@ -135,57 +160,79 @@ func (h *HTTPServer) SetDocPath(path string) {
 	h.docOnline = path
 }
 
+func (h *HTTPServer) SetStaticPath(path, dir string) {
+	h.staticPath = path
+	h.staticDir = dir
+}
+
 // only register ware
 func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware) {
-	path := h.Prefix + "/" + svc.Path()
+	path := h.getPath(svc.Path())
 	if _, ok := h.arch[path]; ok {
 		for _, m := range md {
 			h.arch[path].Before(m)
 		}
 	}
 }
-func (h *HTTPServer) run(ctx context.Context) error {
-	h.svr = &http.Server{Addr: h.Address()}
-	if h.docOnline != "" {
-		http.HandleFunc(h.docOnline, h.handleDoc)
+
+//ServeHTTP server http method
+func (h *HTTPServer) serve(writer http.ResponseWriter, request *http.Request, sv *archive, path string) {
+	if strings.ToLower(request.Method) == "options" {
+		writer.WriteHeader(204)
+		return
 	}
-	http.HandleFunc(h.Prefix+"/", func(writer http.ResponseWriter, request *http.Request) {
-		if strings.ToLower(request.Method) == "options" {
-			writer.WriteHeader(204)
-			return
-		}
-		for k, v := range h.header {
-			writer.Header().Set(k, v)
-		}
-		var result interface{}
-		var err error
+	for k, v := range h.header {
+		writer.Header().Set(k, v)
+	}
+	var result interface{}
+	var err error
 
-		meta, err := getMetaFromURL(request.URL.Path)
-		if err != nil {
-			return
-		}
-		defer func() {
-			putMeta(meta)
-			h.Output(result, err, writer)
-		}()
-		sv, ok := h.arch[meta.Service]
-		if !ok {
-			err = goerr.Errorf(goerr.String("Service:%s Method:%s Version:%s", meta.Service, meta.Method, meta.Version), "UnknownService")
-			return
-		}
+	//meta, err := getMetaFromURL(request.URL.Path)
+	//if err != nil {
+	//	return
+	//}
+	defer func() {
+		h.Marshal(result, err, writer)
+	}()
+	var method, version string
+	ms := request.URL.Path[len(path):]
+	idx := strings.Index(ms, "/")
+	if idx == -1 {
+		method = ms
+	} else {
+		method = ms[:idx]
+		version = ms[idx+1:]
+	}
 
-		nc := newContext(writer, request)
-		c := h.Context(nc)
-		if err = runWare(meta.Version, c, sv.before); err != nil {
-			return
-		}
-		if result, err = sv.runMethod(meta.Method, meta.Version, c); err != nil {
-			return
-		}
-		if err = runWare(meta.Version, c, sv.after); err != nil {
-			return
-		}
-	})
+	nc := newContext(writer, request)
+	c := h.Context(nc)
+	if err = runWare(version, c, sv.before); err != nil {
+		return
+	}
+	if result, err = sv.runMethod(method, version, c); err != nil {
+		return
+	}
+	if err = runWare(version, c, sv.after); err != nil {
+		return
+	}
+}
+func (h *HTTPServer) run(ctx context.Context) error {
+
+	mux := http.NewServeMux()
+	h.svr = &http.Server{Addr: h.Address(), Handler: mux}
+	if h.docOnline != "" {
+		mux.HandleFunc(h.docOnline, h.handleDoc)
+	}
+	if h.staticDir != "" {
+		mux.Handle(h.staticPath, http.FileServer(http.Dir(h.staticDir)))
+	}
+	//http.HandleFunc(h.Prefix+"/", h.ServeHTTP)
+	for path, s := range h.arch {
+		println("register", path)
+		mux.HandleFunc(path, func(writer http.ResponseWriter, request *http.Request) {
+			h.serve(writer, request, s, path)
+		})
+	}
 	h.isRun = true
 	err := h.svr.ListenAndServe()
 	if err != nil {
