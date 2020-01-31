@@ -178,10 +178,17 @@ func (h *HTTPServer) SetStaticPath(path, url string) {
 }
 
 //SetStaticPath static files
-func (h *HTTPServer) SetTemplatePath(path string) {
+func (h *HTTPServer) SetTemplatePath(path, ext string, cached ...bool) error {
 	h.templatePath = path
-	h.tpl = template.New(path)
-
+	tpl, err := template.New(path, ext)
+	if err != nil {
+		return err
+	}
+	if len(cached) > 0 && cached[0] == true {
+		tpl.Cached = true
+	}
+	h.tpl = tpl
+	return nil
 }
 
 //RegisterBeforeWare only register ware
@@ -218,6 +225,7 @@ func (h *HTTPServer) run(ctx context.Context) error {
 				writer.Header().Set(k, v)
 			}
 			if r, ok := result.(*template.HTML); ok {
+				writer.Header().Set("Content-Type", "text/html;charset=utf-8")
 				h.html(r, err, writer)
 			} else {
 				h.Marshal(result, err, writer)

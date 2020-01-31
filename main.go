@@ -11,6 +11,7 @@ import (
 
 func main() {
 	s := httpserver.NewHTTPServer("localhost", 8889)
+	s.SetTemplatePath("/Volumes/doc/test/tpl", ".html")
 	//s.Prefix = "/svr"
 	s.Register(&test.TestService{}).Before(service.Ware{Next: func(entry ctx.Entry) (err error) {
 		name := entry.String("name")

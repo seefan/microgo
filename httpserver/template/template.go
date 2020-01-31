@@ -1,13 +1,12 @@
 package template
 
 import (
+	"github.com/golangteam/function/errors"
 	"html/template"
 	"io"
 	"io/ioutil"
 	"path/filepath"
-
-	"github.com/golangteam/function/errors"
-	"github.com/golangteam/function/file"
+	"strings"
 )
 
 //Template 模板
@@ -15,46 +14,84 @@ type Template struct {
 	tpl    *template.Template
 	Cached bool
 	Root   string
+	ext    string
 }
 
 //New 创建模板
-func New(root string) *Template {
-	t := &Template{Cached: false, Root: root}
+func New(root, ext string) (t *Template, err error) {
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	t = &Template{Cached: false, Root: root, ext: ext}
 	t.init()
-	return t
+	err = t.makeDir(t.tpl, t.Root)
+	return
 }
 func (t *Template) init() {
 	t.tpl = template.New("")
 	t.tpl.Delims("{{", "}}")
+	t.tpl.Funcs(Func)
 }
 
 //MakeFile 生成一个文件
 func (t *Template) MakeFile(src string, w io.Writer, param interface{}) error {
-	src = t.Root + "/" + src
+	if !t.Cached {
+		t.init()
+		if err := t.makeDir(t.tpl, t.Root); err != nil {
+			return err
+		}
+	}
 	//不存在的文件，不处理
-	if file.FileIsNotExist(src) {
+	tm := t.tpl.Lookup(src)
+	if tm == nil {
 		return errors.New("%s not found", src)
 	}
-	//解析文件链接为真实路径
-	input, err := filepath.EvalSymlinks(src)
-	if err != nil {
-		return errors.NewError(err, "%s is not found", src)
-	}
 
-	buf, err := ioutil.ReadFile(input)
+	if err := tm.Execute(w, param); err != nil {
+		return errors.NewError(err, "run %s error", src)
+	}
+	return nil
+}
+func (t *Template) makeDir(tpl *template.Template, path string) error {
+	//查看目录下文件
+	fis, err := ioutil.ReadDir(path)
 	if err != nil {
-		return errors.NewError(err, "%s is not readable", src)
+		return err
 	}
-	tm := t.tpl.New(src)
-
-	// add our funcmaps
-	tm.Funcs(Func)
-	// Bomb out if parse fails. We don't want any silent server starts.
-	if _, err := tm.Parse(string(buf)); err != nil {
-		return errors.NewError(err, "template %s parse error")
+	if strings.HasSuffix(path, "/") {
+		path += "/"
 	}
-	if err := t.tpl.ExecuteTemplate(w, input, param); err != nil {
-		return errors.NewError(err, "run %s error", input)
+	for _, fi := range fis {
+		tmpPath := path + "/" + fi.Name()
+		if fi.IsDir() { //如果是目录，就也目录下所有文件都拷贝过去
+			if err := t.makeDir(tpl, tmpPath); err != nil {
+				return err
+			}
+		} else {
+			extName := filepath.Ext(fi.Name())
+			//特定扩展名的文件才可以作模板
+			if t.ext == extName {
+				if err = t.makeFile(tpl, tmpPath); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
+}
+func (t *Template) makeFile(tpl *template.Template, path string) error {
+	b, err := ioutil.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	s := string(b)
+	if i := strings.Index(path, "/"); i != -1 {
+		path = path[i+1:]
+	}
+	tp := tpl.New(path)
+	_, err = tp.Parse(s)
+	if err != nil {
+		return err
 	}
 	return nil
 }
