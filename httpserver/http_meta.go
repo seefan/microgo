@@ -1,51 +1,49 @@
 package httpserver
 
 import (
-	"errors"
-	"sync"
+	"github.com/seefan/microgo/ctx"
+	"net/http"
+	"strings"
 )
 
-var (
-	Skip     = 0
-	poolMeta = &sync.Pool{
-		New: func() interface{} {
-			return new(HTTPMeta)
-		},
-	}
-)
-
-// HTTPMeta service
-type HTTPMeta struct {
-	Service string
-	Version string
-	Method  string
+type archiveHandler struct {
+	arch          *Archive
+	call          func(interface{}, error, http.ResponseWriter)
+	createContext func(httpContext *HTTPContext) ctx.Entry
 }
 
-func putMeta(meta *HTTPMeta) {
-	poolMeta.Put(meta)
-}
-
-// GetMetaFromURL get meta from url
-func getMetaFromURL(url string) (*HTTPMeta, error) {
-	pos := make([]int, 2)
-	idx := 0
-	size := len(url)
-	for i := size - 1; i >= 0; i-- {
-		if url[i] == '/' {
-			pos[idx] = i
-			idx++
-		}
-
-		if idx == 2 {
-			break
-		}
+//ServeHTTP server http method
+func (a *archiveHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if strings.ToLower(request.Method) == "options" {
+		writer.WriteHeader(204)
+		return
 	}
-	if idx != 2 {
-		return nil, errors.New("WrongURL")
+
+	var result interface{}
+	var err error
+	defer func() {
+		a.call(result, err, writer)
+	}()
+	var method, version string
+	ms := strings.ToLower(request.URL.Path[a.arch.skip:])
+	idx := strings.Index(ms, "/")
+	if idx == -1 {
+		method = ms
+		version = a.arch.defaultMethodVersion[method]
+	} else {
+		method = ms[:idx]
+		version = a.arch.getVersion(method, ms[idx+1:])
 	}
-	m := poolMeta.Get().(*HTTPMeta)
-	m.Service = url[:pos[1]]
-	m.Version = url[pos[0]+1 : size]
-	m.Method = url[pos[1]+1 : pos[0]]
-	return m, nil
+
+	nc := newContext(writer, request)
+	c := a.createContext(nc)
+	if err = runWare(version, c, a.arch.before); err != nil {
+		return
+	}
+	if result, err = a.arch.runMethod(method, version, c); err != nil {
+		return
+	}
+	if err = runWare(version, c, a.arch.after); err != nil {
+		return
+	}
 }

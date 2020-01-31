@@ -1,2 +1,4 @@
+github.com/golangteam/function v0.0.0-20200130100008-1578d75bbf85 h1:xoD648BQHZgAJWH0txF+XLtNSqg0J5A7yuVARxZhCOM=
+github.com/golangteam/function v0.0.0-20200130100008-1578d75bbf85/go.mod h1:6hfqxZww1Zd3uunl/wYjocuE6a4KyK0v1rAj5Ui742c=
 github.com/seefan/goerr v1.1.2 h1:rLUrQeJY1FRYd2WIsZDr7mr0F58gKPSnCvtBjj00b3Q=
 github.com/seefan/goerr v1.1.2/go.mod h1:gipDsSn2T2Jwf0q9bl6K0CGyhvfNZiI8/Bi0MfsS258=

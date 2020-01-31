@@ -2,14 +2,19 @@ package test
 
 import (
 	"github.com/seefan/microgo/ctx"
+	"github.com/seefan/microgo/httpserver/template"
 	"strconv"
 )
 
 type TestService struct {
 }
 
+func (TestService) Default(entry ctx.Entry) interface{} {
+	c := make(template.HTMLContext)
+	c.Title("test it")
+	return &template.HTML{URL: "important.txt", Context: c}
+}
 func (TestService) HelloWorld(entry ctx.Entry) interface{} {
-
 	return "hello "
 }
 func (TestService) Hello(entry ctx.Entry) interface{} {
@@ -19,7 +24,7 @@ func (TestService) Hello(entry ctx.Entry) interface{} {
 	return "hello " + name + strconv.Itoa(b)
 }
 func (TestService) Path() string {
-	return "test"
+	return ""
 }
 func (TestService) Version() string {
 	return "1.0"
@@ -34,6 +39,7 @@ func (TestService1) Hello(entry ctx.Entry) interface{} {
 	b := 3 / (a - 3)
 	return "hello " + name + strconv.Itoa(b)
 }
+
 func (TestService1) Path() string {
 	return "test"
 }

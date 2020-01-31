@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"github.com/seefan/goerr"
 	"github.com/seefan/microgo/ctx"
+	"github.com/seefan/microgo/httpserver/template"
 	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -15,6 +17,7 @@ import (
 // HTTPServer for basic function
 type HTTPServer struct {
 	server.Server
+	tpl   *template.Template
 	isRun bool
 	//Debug output debug info
 	Debug bool
@@ -22,8 +25,10 @@ type HTTPServer struct {
 	docOnline string
 	//static file
 	staticPath string
-	//static file
-	staticDir string
+	//static url
+	staticURL string
+	//template path
+	templatePath string
 	//common prefix
 	Prefix string
 	//server
@@ -34,7 +39,7 @@ type HTTPServer struct {
 	//common header
 	header map[string]string
 	//path:service
-	arch map[string]*archive
+	arch map[string]*Archive
 
 	//method context
 	Context func(*HTTPContext) ctx.Entry
@@ -56,12 +61,12 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			"Access-Control-Allow-Headers": "Cache-Control, Pragma, Origin, Authorization, Content-Type, X-Requested-With",
 		},
 		docOnline: "/doc",
-		arch:      make(map[string]*archive),
+		arch:      make(map[string]*Archive),
 		Context: func(httpContext *HTTPContext) ctx.Entry {
 			return httpContext
 		},
 		RuntimeLog: func(err error) {
-			//do nothing
+			log.Println(err)
 		},
 	}
 	hs.Result = func(result interface{}, err error) interface{} {
@@ -100,16 +105,15 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 	return hs
 }
 
-// Set common header
+//Header Set common header
 func (h *HTTPServer) Header(name, value string) {
 	h.header[name] = value
 }
 
-// Start the server
+//Stop stop the server
 func (h *HTTPServer) Stop() error {
 	if h.isRun {
 		h.isRun = false
-		h.svr.Shutdown()
 		if h.CloseFunc != nil {
 			h.CloseFunc()
 		}
@@ -118,7 +122,7 @@ func (h *HTTPServer) Stop() error {
 	return nil
 }
 
-// Start the server
+//Start the server
 func (h *HTTPServer) Start(ctx context.Context) (err error) {
 	if h.InitFunc != nil {
 		h.InitFunc()
@@ -136,16 +140,19 @@ func (h *HTTPServer) getPath(p string) (path string) {
 	}
 	return
 }
-func (h *HTTPServer) Register(svc service.Service) *archive {
+
+//Register register service
+func (h *HTTPServer) Register(svc service.Service) *Archive {
 	path := h.getPath(svc.Path())
 	if _, ok := h.arch[path]; !ok {
-		h.arch[path] = NewArchive()
+		h.arch[path] = newArchive(path)
 	}
+
 	h.arch[path].Put(svc)
 	return h.arch[path]
 }
 
-// only register ware
+//RegisterAfterWare only register ware
 func (h *HTTPServer) RegisterAfterWare(svc service.Service, md ...service.Ware) {
 	path := h.getPath(svc.Path())
 	if _, ok := h.arch[path]; ok {
@@ -155,17 +162,29 @@ func (h *HTTPServer) RegisterAfterWare(svc service.Service, md ...service.Ware) 
 	}
 }
 
-// only register ware
+//SetDocPath only register ware
 func (h *HTTPServer) SetDocPath(path string) {
 	h.docOnline = path
 }
 
-func (h *HTTPServer) SetStaticPath(path, dir string) {
+//SetStaticPath static files
+func (h *HTTPServer) SetStaticPath(path, url string) {
 	h.staticPath = path
-	h.staticDir = dir
+	if strings.HasSuffix(url, "/") || url == "" {
+		h.staticURL = url
+	} else {
+		h.staticURL = url + "/"
+	}
 }
 
-// only register ware
+//SetStaticPath static files
+func (h *HTTPServer) SetTemplatePath(path string) {
+	h.templatePath = path
+	h.tpl = template.New(path)
+
+}
+
+//RegisterBeforeWare only register ware
 func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware) {
 	path := h.getPath(svc.Path())
 	if _, ok := h.arch[path]; ok {
@@ -174,65 +193,42 @@ func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware)
 		}
 	}
 }
-
-//ServeHTTP server http method
-func (h *HTTPServer) serve(writer http.ResponseWriter, request *http.Request, sv *archive, path string) {
-	if strings.ToLower(request.Method) == "options" {
-		writer.WriteHeader(204)
+func (h *HTTPServer) html(ht *template.HTML, err error, w io.Writer) {
+	if err != nil {
+		h.RuntimeLog(err)
 		return
 	}
-	for k, v := range h.header {
-		writer.Header().Set(k, v)
-	}
-	var result interface{}
-	var err error
-
-	//meta, err := getMetaFromURL(request.URL.Path)
-	//if err != nil {
-	//	return
-	//}
-	defer func() {
-		h.Marshal(result, err, writer)
-	}()
-	var method, version string
-	ms := request.URL.Path[len(path):]
-	idx := strings.Index(ms, "/")
-	if idx == -1 {
-		method = ms
-	} else {
-		method = ms[:idx]
-		version = ms[idx+1:]
-	}
-
-	nc := newContext(writer, request)
-	c := h.Context(nc)
-	if err = runWare(version, c, sv.before); err != nil {
-		return
-	}
-	if result, err = sv.runMethod(method, version, c); err != nil {
-		return
-	}
-	if err = runWare(version, c, sv.after); err != nil {
-		return
+	if h.tpl != nil {
+		if err := h.tpl.MakeFile(ht.URL, w, ht.Context); err != nil {
+			h.RuntimeLog(err)
+		}
 	}
 }
 func (h *HTTPServer) run(ctx context.Context) error {
-
 	mux := http.NewServeMux()
+
 	h.svr = &http.Server{Addr: h.Address(), Handler: mux}
 	if h.docOnline != "" {
 		mux.HandleFunc(h.docOnline, h.handleDoc)
 	}
-	if h.staticDir != "" {
-		mux.Handle(h.staticPath, http.FileServer(http.Dir(h.staticDir)))
-	}
-	//http.HandleFunc(h.Prefix+"/", h.ServeHTTP)
+
 	for path, s := range h.arch {
-		println("register", path)
-		mux.HandleFunc(path, func(writer http.ResponseWriter, request *http.Request) {
-			h.serve(writer, request, s, path)
-		})
+		mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(result interface{}, err error, writer http.ResponseWriter) {
+			for k, v := range h.header {
+				writer.Header().Set(k, v)
+			}
+			if r, ok := result.(*template.HTML); ok {
+				h.html(r, err, writer)
+			} else {
+				h.Marshal(result, err, writer)
+			}
+		}})
 	}
+
+	if h.staticPath != "" {
+		mux.Handle(h.staticURL, http.StripPrefix(h.staticURL, http.FileServer(http.Dir(h.staticPath))))
+	}
+
 	h.isRun = true
 	err := h.svr.ListenAndServe()
 	if err != nil {

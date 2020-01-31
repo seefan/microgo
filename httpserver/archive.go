@@ -14,17 +14,22 @@ import (
 	"strings"
 )
 
-type archive struct {
+//Archive Archive
+type Archive struct {
 	defaultMethodVersion map[string]string
 	currentVersion       string
 	svc                  map[string]*unit          //version:service
 	method               map[string]Method         //version:method
 	before               map[string][]service.Ware //version:ware
 	after                map[string][]service.Ware //version:ware
+	skip                 int
+	name                 string
 }
 
-func NewArchive() *archive {
-	return &archive{
+func newArchive(name string) *Archive {
+	return &Archive{
+		name:                 name,
+		skip:                 len(name),
 		svc:                  make(map[string]*unit),
 		defaultMethodVersion: make(map[string]string),
 		method:               make(map[string]Method),
@@ -33,27 +38,28 @@ func NewArchive() *archive {
 	}
 }
 
-// set service and version
-func (a *archive) Put(sv service.Service) {
+//Put set service and version
+func (a *Archive) Put(sv service.Service) {
 	t := newUnit(sv)
 	a.svc[sv.Path()] = t
-	a.currentVersion = sv.Version()
+	a.currentVersion = strings.ToLower(sv.Version())
 	for name, f := range t.method {
+		name = strings.ToLower(name)
 		if _, ok := a.method[name]; !ok {
 			a.method[name] = make(Method)
 		}
-		a.method[name][sv.Version()] = f
-		if v, ok := a.defaultMethodVersion[name]; !ok || sv.Version() > v {
-			a.defaultMethodVersion[name] = sv.Version()
+		a.method[name][a.currentVersion] = f
+		if v, ok := a.defaultMethodVersion[name]; !ok || a.currentVersion > v {
+			a.defaultMethodVersion[name] = a.currentVersion
 		}
 	}
 }
 
-// set before ware
-func (a *archive) Before(mid service.Ware, svc ...service.Service) {
+//Before set before ware
+func (a *Archive) Before(mid service.Ware, svc ...service.Service) {
 	var cv string
 	if len(svc) > 0 {
-		cv = svc[0].Version()
+		cv = strings.ToLower(svc[0].Version())
 	} else {
 		cv = a.currentVersion
 	}
@@ -64,11 +70,11 @@ func (a *archive) Before(mid service.Ware, svc ...service.Service) {
 	}
 }
 
-// set after ware
-func (a *archive) After(mid service.Ware, svc ...service.Service) {
+//After set after ware
+func (a *Archive) After(mid service.Ware, svc ...service.Service) {
 	var cv string
 	if len(svc) > 0 {
-		cv = svc[0].Version()
+		cv = strings.ToLower(svc[0].Version())
 	} else {
 		cv = a.currentVersion
 	}
@@ -79,20 +85,18 @@ func (a *archive) After(mid service.Ware, svc ...service.Service) {
 	}
 }
 
-// get method
-func (a *archive) getMethod(name, v string) (func(ctx.Entry) interface{}, error) {
+func (a *Archive) getVersion(name, version string) string {
 	if mv, ok := a.method[name]; ok {
-		if m, ok := mv[v]; ok {
-			return m, nil
-		} else {
-			return mv[a.defaultMethodVersion[name]], nil
+		if _, ok := mv[version]; ok {
+			return version
 		}
+		return a.defaultMethodVersion[name]
 	}
-	return nil, goerr.String("MethodNotFound", name, v)
+	return ""
 }
 
 // RunMethod run a method
-func (a *archive) runMethod(name, version string, entry ctx.Entry) (re interface{}, err error) {
+func (a *Archive) runMethod(name, version string, entry ctx.Entry) (re interface{}, err error) {
 	defer func() {
 		if e := recover(); e != nil {
 			ne := goerr.String("RuntimeError:%s", e)
@@ -110,15 +114,20 @@ func (a *archive) runMethod(name, version string, entry ctx.Entry) (re interface
 			err = ne
 		}
 	}()
-
-	if mv, ok := a.method[strings.ToLower(name)]; ok {
+	if name == "" { //check default method
+		if mv, ok := a.method["default"]; ok {
+			return mv[a.defaultMethodVersion["default"]](entry), nil
+		}
+	}
+	if mv, ok := a.method[name]; ok {
 		if m, ok := mv[version]; ok {
 			return m(entry), nil
 		} else {
 			return mv[a.defaultMethodVersion[name]](entry), nil
 		}
 	}
-	return nil, goerr.Errorf(goerr.String("Method:%s Version:%s", name, version), "MethodNotFound")
+
+	return nil, goerr.Errorf(goerr.String("Methods:%s Version:%s", name, version), "MethodNotFound")
 }
 
 // run ware
