@@ -1,5 +1,13 @@
 package httpserver
 
-import "github.com/seefan/microgo/ctx"
+//Method method map
+type Method interface{}
 
-type Method map[string]func(entry ctx.Entry) interface{}
+// //MethodInputPutput method
+// type MethodInputPutput func(entry ctx.Entry) interface{}
+
+// //MethodOnlyInput no output
+// type MethodOnlyInput func(entry ctx.Entry)
+
+// //MethodOnlyOutput no input
+// type MethodOnlyOutput func() interface{}

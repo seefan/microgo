@@ -3,15 +3,16 @@ package httpserver
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log"
+	"net/http"
+	"strings"
+
 	"github.com/seefan/goerr"
 	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/httpserver/template"
 	"github.com/seefan/microgo/server"
 	"github.com/seefan/microgo/service"
-	"io"
-	"log"
-	"net/http"
-	"strings"
 )
 
 // HTTPServer for basic function
@@ -33,9 +34,8 @@ type HTTPServer struct {
 	Prefix string
 	//server
 	svr *http.Server
-	//mux
-	//mux *http.ServeMux
-
+	//web socket prefix
+	websocketURL string
 	//common header
 	header map[string]string
 	//path:service
@@ -44,7 +44,7 @@ type HTTPServer struct {
 	//method context
 	Context func(*HTTPContext) ctx.Entry
 	//Marshal format
-	Marshal func(result interface{}, err error, w io.Writer)
+	Marshal func(result interface{}, err error) ([]byte, error)
 	//result format
 	Result func(result interface{}, err error) interface{}
 	//log
@@ -91,15 +91,9 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 		}
 		return re
 	}
-	hs.Marshal = func(result interface{}, err error, w io.Writer) {
+	hs.Marshal = func(result interface{}, err error) ([]byte, error) {
 		re := hs.Result(result, err)
-		if bs, err := json.Marshal(re); err == nil {
-			if _, err := w.Write(bs); err != nil {
-				hs.RuntimeLog(err)
-			}
-		} else {
-			hs.RuntimeLog(err)
-		}
+		return json.Marshal(re)
 	}
 	hs.Server.Init(host, port)
 	return hs
@@ -143,18 +137,20 @@ func (h *HTTPServer) getPath(p string) (path string) {
 
 //Register register service
 func (h *HTTPServer) Register(svc service.Service) *Archive {
-	path := h.getPath(svc.Path())
+	sg := service.NewService(svc)
+	path := h.getPath(sg.Path())
 	if _, ok := h.arch[path]; !ok {
 		h.arch[path] = newArchive(path)
 	}
 
-	h.arch[path].Put(svc)
+	h.arch[path].put(sg)
 	return h.arch[path]
 }
 
 //RegisterAfterWare only register ware
 func (h *HTTPServer) RegisterAfterWare(svc service.Service, md ...service.Ware) {
-	path := h.getPath(svc.Path())
+	sg := service.NewService(svc)
+	path := h.getPath(sg.Path())
 	if _, ok := h.arch[path]; ok {
 		for _, m := range md {
 			h.arch[path].After(m)
@@ -167,6 +163,11 @@ func (h *HTTPServer) SetDocPath(path string) {
 	h.docOnline = path
 }
 
+//SetWebsocketURL websocket url prefix
+func (h *HTTPServer) SetWebsocketURL(url string) {
+	h.websocketURL = url
+}
+
 //SetStaticPath static files
 func (h *HTTPServer) SetStaticPath(path, url string) {
 	h.staticPath = path
@@ -177,7 +178,7 @@ func (h *HTTPServer) SetStaticPath(path, url string) {
 	}
 }
 
-//SetStaticPath static files
+//SetTemplatePath static files
 func (h *HTTPServer) SetTemplatePath(path, ext string, cached ...bool) error {
 	h.templatePath = path
 	tpl, err := template.New(path, ext)
@@ -193,19 +194,33 @@ func (h *HTTPServer) SetTemplatePath(path, ext string, cached ...bool) error {
 
 //RegisterBeforeWare only register ware
 func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware) {
-	path := h.getPath(svc.Path())
+	sg := service.NewService(svc)
+	path := h.getPath(sg.Path())
 	if _, ok := h.arch[path]; ok {
 		for _, m := range md {
 			h.arch[path].Before(m)
 		}
 	}
 }
-func (h *HTTPServer) html(ht *template.HTML, err error, w io.Writer) {
+func (h *HTTPServer) html(ht *template.HTML, err error, request *http.Request, w io.Writer) {
 	if err != nil {
 		h.RuntimeLog(err)
 		return
 	}
 	if h.tpl != nil {
+		if len(request.Form) > 0 {
+			rspForm := make(map[string]interface{})
+			for k, v := range request.Form {
+				if len(v) == 0 {
+					rspForm[k] = ""
+				} else if len(v) == 1 {
+					rspForm[k] = v[0]
+				} else {
+					rspForm[k] = v
+				}
+			}
+			ht.Context["_form"] = rspForm
+		}
 		if err := h.tpl.MakeFile(ht.URL, w, ht.Context); err != nil {
 			h.RuntimeLog(err)
 		}
@@ -220,17 +235,35 @@ func (h *HTTPServer) run(ctx context.Context) error {
 	}
 
 	for path, s := range h.arch {
-		mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(result interface{}, err error, writer http.ResponseWriter) {
-			for k, v := range h.header {
-				writer.Header().Set(k, v)
-			}
-			if r, ok := result.(*template.HTML); ok {
-				writer.Header().Set("Content-Type", "text/html;charset=utf-8")
-				h.html(r, err, writer)
-			} else {
-				h.Marshal(result, err, writer)
-			}
-		}})
+		if h.websocketURL != "" && strings.HasPrefix(path, h.websocketURL) {
+			mux.Handle(path, &archiveWebsocketHandler{arch: s, createContext: h.Context, call: func(result interface{}, err error) []byte {
+				bs, err := h.Marshal(result, err)
+				if err != nil {
+					h.RuntimeLog(err)
+					return nil
+				}
+				return bs
+			}})
+		} else {
+			mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(result interface{}, err error, request *http.Request, writer http.ResponseWriter) {
+				for k, v := range h.header {
+					writer.Header().Set(k, v)
+				}
+				if r, ok := result.(*template.HTML); ok {
+					writer.Header().Set("Content-Type", "text/html;charset=utf-8")
+					h.html(r, err, request, writer)
+				} else {
+					bs, err := h.Marshal(result, err)
+					if err != nil {
+						h.RuntimeLog(err)
+						return
+					}
+					if _, err := writer.Write(bs); err != nil {
+						h.RuntimeLog(err)
+					}
+				}
+			}})
+		}
 	}
 
 	if h.staticPath != "" {

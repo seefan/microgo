@@ -8,13 +8,15 @@ package run
 
 import (
 	"context"
-	"github.com/seefan/microgo/server"
 	"os"
 	"path/filepath"
 	"syscall"
+
+	"github.com/seefan/microgo/server"
 )
 
-func Run(r server.Runnable, outFile ...string) {
+//Run the new server.Runnable
+func Run(run func() server.Runnable, outFile ...string) {
 	defer printErr()
 	cmd := "debug"
 	if len(os.Args) > 1 {
@@ -51,16 +53,16 @@ func Run(r server.Runnable, outFile ...string) {
 				}
 			}()
 		}
-		nohup(func() error {
-			return start(path, r)
-		}, func(signal os.Signal, e error) {
-			if e != nil {
-				println(e.Error())
-			} else {
-				if e = r.Stop(); e != nil {
-					println(e.Error())
-				}
+		nohup(func(sig chan<- os.Signal) {
+			r := run()
+			if err := r.Start(context.Background()); err != nil {
+				sig <- syscall.SIGABRT
+				return
 			}
+			if err := r.Stop(); err != nil {
+				println(err.Error())
+			}
+
 		}, f, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 
 	case "stop":
@@ -68,17 +70,9 @@ func Run(r server.Runnable, outFile ...string) {
 			println(err.Error())
 		}
 	default:
-		if err := start(path, r); err != nil {
+		r := run()
+		if err := r.Start(context.Background()); err != nil {
 			println(err.Error())
 		}
 	}
-}
-
-func start(startPath string, r server.Runnable) error {
-	//load config
-
-	if err := r.Start(context.Background()); err != nil {
-		return err
-	}
-	return nil
 }

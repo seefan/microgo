@@ -1,6 +1,7 @@
 package template
 
 import (
+	"fmt"
 	"html/template"
 	"strings"
 	"time"
@@ -19,18 +20,34 @@ func init() {
 	Func["fmt_date"] = func(s time.Time) string {
 		return s.Format(fmtDateString)
 	}
+	Func["fmt_date_string"] = func(date string) string {
+		return date[:10]
+	}
 	Func["fmt_datetime"] = func(s time.Time) string {
 		return s.Format(fmtDateTimeString)
 	}
 	Func["start_with"] = func(s string, d string) bool {
 		return strings.HasPrefix(s, d)
 	}
-	Func["html"] = rawHTML
-	Func["attr"] = rawHTMLAttr
-	Func["js"] = rawJS
-	Func["css"] = rawCSS
-	Func["url"] = rawURL
-
+	Func["left"] = func(s string, size int) string {
+		if len(s)<=size{
+			return s
+		}
+		return s[:size]+"..."
+	}
+	Func["rawHTML"] = rawHTML
+	Func["hidden"] = func(id,value string) template.HTML {
+		return template.HTML(fmt.Sprintf(`<input type="hidden" id="%s" name="%s" data-bind="%s" value="%s"/>`, id, id, id, value))
+	}
+	Func["mv"] = func(id string,m map[string]interface{}) interface{} {
+		if v,ok:=m[id];ok{
+			if s,ok:=v.(string);ok{
+				return s
+			}
+			return fmt.Sprint(m[id])
+		}
+		return ""
+	}
 	// UtilFuncs["dict_extends"] = func(d model.Dict, i string) string {
 	// 	switch i {
 	// 	case "6":
@@ -60,7 +77,18 @@ func init() {
 			return defaultImg
 		}
 	}
-
+	Func["default"] = func(str,defStr string) string {
+		if str!=""{
+			return str
+		}
+		return defStr
+	}
+	Func["add"] = func(n1,n2 int) int {
+		return n1+n2
+	}
+	Func["dec"] = func(n1,n2 int) int {
+		return n1-n2
+	}
 }
 
 //func equals(ss ...interface{}) bool {
@@ -80,20 +108,4 @@ func rawHTML(text string) template.HTML {
 }
 func rawHTMLAttr(text string) template.HTMLAttr {
 	return template.HTMLAttr(text)
-}
-
-func rawCSS(text string) template.CSS {
-	return template.CSS(text)
-}
-
-func rawJS(text string) template.JS {
-	return template.JS(text)
-}
-
-func rawJSStr(text string) template.JSStr {
-	return template.JSStr(text)
-}
-
-func rawURL(text string) template.URL {
-	return template.URL(text)
 }
