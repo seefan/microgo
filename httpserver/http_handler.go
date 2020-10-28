@@ -1,12 +1,12 @@
 package httpserver
 
 import (
+	"net/http"
+	"strings"
+
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
 	"github.com/seefan/microgo/ctx"
-	"net"
-	"net/http"
-	"strings"
 )
 
 type archiveHandler struct {
@@ -55,10 +55,6 @@ type archiveWebsocketHandler struct {
 	arch          *Archive
 	call          func(interface{}, error) []byte
 	createContext func(httpContext *HTTPContext) ctx.Entry
-}
-
-func (a *archiveWebsocketHandler) write(conn net.Conn, op ws.OpCode, msg string) {
-
 }
 
 //ServeHTTP server http method

@@ -1,12 +1,13 @@
 package template
 
 import (
-	"github.com/golangteam/function/errors"
 	"html/template"
 	"io"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
+
+	"github.com/seefan/goerr"
 )
 
 //Template 模板
@@ -44,11 +45,11 @@ func (t *Template) MakeFile(src string, w io.Writer, param interface{}) error {
 	//不存在的文件，不处理
 	tm := t.tpl.Lookup(src)
 	if tm == nil {
-		return errors.New("%s not found", src)
+		return goerr.String("%s not found", src)
 	}
 
 	if err := tm.Execute(w, param); err != nil {
-		return errors.NewError(err, "run %s error", src)
+		return goerr.Errorf(err, "run %s error", src)
 	}
 	return nil
 }

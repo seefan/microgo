@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-//Service
+//Service base service
 type Service interface {
 }
 
@@ -19,6 +19,12 @@ type ServiceVersion interface {
 type ServicePath interface {
 	//Based on this url
 	Path() string
+}
+
+//ServiceName base service
+type ServiceName interface {
+	//Based on this url
+	Name() string
 }
 
 func NewService(obj Service) *ServiceGroup {
@@ -39,20 +45,26 @@ func NewService(obj Service) *ServiceGroup {
 type ServiceGroup struct {
 	path    string
 	version string
+	name    string
 	svr     Service
 }
 
-//Path path
+//Path service path
 func (s *ServiceGroup) Path() string {
 	return s.path
 }
 
-//Version version
+//Version service version
 func (s *ServiceGroup) Version() string {
 	return s.version
 }
 
 //Service service
 func (s *ServiceGroup) Service() Service {
+	return s.svr
+}
+
+//Name service name
+func (s *ServiceGroup) Name() Service {
 	return s.svr
 }
