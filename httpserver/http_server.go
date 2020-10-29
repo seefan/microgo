@@ -1,7 +1,6 @@
 package httpserver
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"log"
@@ -117,11 +116,11 @@ func (h *HTTPServer) Stop() error {
 }
 
 //Start the server
-func (h *HTTPServer) Start(ctx context.Context) (err error) {
+func (h *HTTPServer) Start() (err error) {
 	if h.InitFunc != nil {
 		h.InitFunc()
 	}
-	return h.run(ctx)
+	return h.run()
 }
 func (h *HTTPServer) getPath(p string) (path string) {
 	if strings.HasPrefix(p, "/") {
@@ -226,7 +225,7 @@ func (h *HTTPServer) html(ht *template.HTML, err error, request *http.Request, w
 		}
 	}
 }
-func (h *HTTPServer) run(ctx context.Context) error {
+func (h *HTTPServer) run() error {
 	mux := http.NewServeMux()
 
 	h.svr = &http.Server{Addr: h.Address(), Handler: mux}
@@ -275,6 +274,5 @@ func (h *HTTPServer) run(ctx context.Context) error {
 	if err != nil {
 		h.isRun = false
 	}
-	ctx.Done()
 	return err
 }
