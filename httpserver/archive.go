@@ -108,7 +108,7 @@ func (a *Archive) runMethod(name, version string, entry ctx.Entry) (re interface
 					if get {
 						ne.AttachE(goerr.String(runtime.FuncForPC(fp).Name()).File(f1).Line(l))
 					}
-					if strings.Index(f1, "github.com/seefan/microgo/httpserver/archive.go") != -1 {
+					if strings.Contains(f1, "github.com/seefan/microgo/httpserver/archive.go") {
 						get = true
 					}
 				}

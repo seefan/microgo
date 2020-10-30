@@ -4,7 +4,6 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/seefan/microgo/ctx"
 	"github.com/seefan/microgo/service"
 )
 
@@ -26,13 +25,16 @@ func (a *unit) resolve(s *service.ServiceGroup) {
 	t := reflect.TypeOf(s.Service())
 	for i := 0; i < t.NumMethod(); i++ {
 		m := svr.MethodByName(t.Method(i).Name)
-		if f, ok := m.Interface().(func(entry ctx.Entry) interface{}); ok {
+		if f, ok := m.Interface().(MethodInputPutput); ok {
 			a.method[strings.ToLower(t.Method(i).Name)] = f
 		}
-		if f, ok := m.Interface().(func(entry ctx.Entry)); ok {
+		if f, ok := m.Interface().(MethodOnlyInput); ok {
 			a.method[strings.ToLower(t.Method(i).Name)] = f
 		}
-		if f, ok := m.Interface().(func() interface{}); ok {
+		if f, ok := m.Interface().(MethodOnlyOutput); ok {
+			a.method[strings.ToLower(t.Method(i).Name)] = f
+		}
+		if f, ok := m.Interface().(MethodNoInputOutput); ok {
 			a.method[strings.ToLower(t.Method(i).Name)] = f
 		}
 	}
