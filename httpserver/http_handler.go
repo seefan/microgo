@@ -3,6 +3,7 @@ package httpserver
 import (
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gobwas/ws"
 	"github.com/gobwas/ws/wsutil"
@@ -11,7 +12,7 @@ import (
 
 type archiveHandler struct {
 	arch          *Archive
-	call          func(interface{}, error, *http.Request, http.ResponseWriter)
+	call          func(*ctx.Result, error, *http.Request, http.ResponseWriter)
 	createContext func(httpContext *HTTPContext) ctx.Entry
 }
 
@@ -22,11 +23,9 @@ func (a *archiveHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		return
 	}
 
-	var result interface{}
+	result := &ctx.Result{BeginNano: time.Now().UnixNano()}
 	var err error
-	defer func() {
-		a.call(result, err, request, writer)
-	}()
+
 	var method, version string
 	ms := strings.ToLower(request.URL.Path[a.arch.skip:])
 	idx := strings.Index(ms, "/")
@@ -37,29 +36,37 @@ func (a *archiveHandler) ServeHTTP(writer http.ResponseWriter, request *http.Req
 		method = ms[:idx]
 		version = a.arch.getVersion(method, ms[idx+1:])
 	}
-
 	nc := newContext(writer, request)
 	c := a.createContext(nc)
 	if err = runWare(version, c, a.arch.before); err != nil {
+		result.EndNano = time.Now().UnixNano()
+		a.call(result, err, request, writer)
 		return
 	}
-	if result, err = a.arch.runMethod(method, version, c); err != nil {
+	re, err := a.arch.runMethod(method, version, c)
+	if err != nil {
+		result.EndNano = time.Now().UnixNano()
+		a.call(result, err, request, writer)
 		return
 	}
+	result.Data = re
 	if err = runWare(version, c, a.arch.after); err != nil {
+		result.EndNano = time.Now().UnixNano()
+		a.call(result, err, request, writer)
 		return
 	}
+	result.EndNano = time.Now().UnixNano()
+	a.call(result, err, request, writer)
 }
 
 type archiveWebsocketHandler struct {
 	arch          *Archive
-	call          func(interface{}, error) []byte
+	call          func(*ctx.Result, error) []byte
 	createContext func(httpContext *HTTPContext) ctx.Entry
 }
 
 //ServeHTTP server http method
 func (a *archiveWebsocketHandler) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
-
 	conn, _, _, err := ws.UpgradeHTTP(request, writer)
 	if err != nil {
 		a.call(nil, err)
@@ -93,8 +100,9 @@ func (a *archiveWebsocketHandler) ServeHTTP(writer http.ResponseWriter, request 
 	}()
 
 }
-func (a *archiveWebsocketHandler) handler(msg []byte, writer http.ResponseWriter, request *http.Request) (result interface{}, err error) {
+func (a *archiveWebsocketHandler) handler(msg []byte, writer http.ResponseWriter, request *http.Request) (result *ctx.Result, err error) {
 	var method, version string
+	result = &ctx.Result{BeginNano: time.Now().UnixNano()}
 	ms := strings.ToLower(request.URL.Path[a.arch.skip:])
 	idx := strings.Index(ms, "/")
 	if idx == -1 {
@@ -109,11 +117,15 @@ func (a *archiveWebsocketHandler) handler(msg []byte, writer http.ResponseWriter
 	c := a.createContext(nc)
 
 	if err = runWare(version, c, a.arch.before); err != nil {
+		result.EndNano = time.Now().UnixNano()
 		return
 	}
-	if result, err = a.arch.runMethod(method, version, c); err != nil {
+	re, err := a.arch.runMethod(method, version, c)
+	if err != nil {
+		result.EndNano = time.Now().UnixNano()
 		return
 	}
+	result.Data = re
 	err = runWare(version, c, a.arch.after)
 	return
 }

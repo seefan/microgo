@@ -1,7 +1,9 @@
 package test
 
 import (
+	"math/rand"
 	"strconv"
+	"time"
 
 	"github.com/seefan/microgo/ctx"
 )
@@ -15,6 +17,7 @@ type TestService struct {
 // 	return &template.HTML{URL: "important.txt", Context: c}
 // }
 func (TestService) HelloWorld(entry ctx.Entry) interface{} {
+	time.Sleep(time.Millisecond)
 	return "hello "
 }
 func (TestService) Hello(entry ctx.Entry) interface{} {
@@ -34,10 +37,11 @@ type TestService1 struct {
 }
 
 func (TestService1) Hello(entry ctx.Entry) interface{} {
+	ts := rand.Intn(1000)
+	time.Sleep(time.Millisecond * time.Duration(ts))
+	println(ts)
 	name := entry.String("name")
-	a := 3
-	b := 3 / (a - 3)
-	return "hello " + name + strconv.Itoa(b)
+	return "hello " + name
 }
 
 func (TestService1) Version() string {
