@@ -7,7 +7,10 @@ type Entry interface {
 }
 
 type Result struct {
-	Data      interface{}
+	Response  interface{}
+	Request   Entry
 	BeginNano int64
 	EndNano   int64
+	Method    string
+	Version   string
 }

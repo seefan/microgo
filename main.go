@@ -21,11 +21,11 @@ func main() {
 			re := make(map[string]interface{})
 			if err != nil {
 				re["error"] = err.Error()
-			} else if result.Data != nil {
-				if e, ok := result.Data.(error); ok && e != nil {
+			} else if result.Response != nil {
+				if e, ok := result.Response.(error); ok && e != nil {
 					re["error"] = e.Error()
 				} else {
-					re["data"] = result.Data
+					re["data"] = result.Response
 					re["error"] = 0
 				}
 			} else {
