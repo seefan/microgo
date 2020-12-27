@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -148,8 +149,11 @@ func (a *archiveWebsocketHandler) handler(content *ctx.Result, data []byte, writ
 	}
 	nc := newContext(writer, request)
 	nc.body = msg
-	for k, v := range param {
-		nc.Set(k, v)
+	if len(param) > 0 {
+		nc.form = make(url.Values)
+		for k, v := range param {
+			nc.Set(k, v)
+		}
 	}
 	content.Request = a.createContext(nc)
 

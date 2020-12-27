@@ -26,7 +26,8 @@ func main() {
 		}
 	}()
 	for i := 0; i < 10; i++ {
-		err = c.WriteMessage(websocket.TextMessage, []byte(`/testservice1/hello/1.1`))
+		err = c.WriteMessage(websocket.TextMessage, []byte(`/testservice1/hello/1.1
+		{"name":"jack"}`))
 		if err != nil {
 			log.Println("write:", err)
 			return
