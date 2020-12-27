@@ -17,6 +17,7 @@ func main() {
 		println("httpserver start ", "localhost", 8889)
 		//s.SetTemplatePath("/Volumes/doc/test/tpl", ".html")
 		//s.Prefix = "/svr"
+		s.SetWebsocketURL("/ws")
 		s.Result = func(result *ctx.Result, err error) interface{} {
 			re := make(map[string]interface{})
 			if err != nil {

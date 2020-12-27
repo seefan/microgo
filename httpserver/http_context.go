@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -10,9 +11,11 @@ import (
 
 //HTTPContext context
 type HTTPContext struct {
-	form     url.Values
-	Request  *http.Request
-	Response http.ResponseWriter
+	form       url.Values
+	Request    *http.Request
+	Response   http.ResponseWriter
+	body       string
+	isBodyRead bool
 }
 
 //NewContext new NewContext
@@ -45,6 +48,19 @@ func (h *HTTPContext) String(name string) string {
 		}
 	}
 	return ""
+}
+
+//Body 获取 request body
+func (h *HTTPContext) Body() string {
+	if h.body == "" && !h.isBodyRead {
+		h.isBodyRead = true
+		if bs, err := ioutil.ReadAll(h.Request.Body); err == nil {
+			h.body = string(bs)
+			h.Request.Body.Close()
+		}
+
+	}
+	return h.body
 }
 
 //Value get param value

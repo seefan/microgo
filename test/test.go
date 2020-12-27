@@ -37,7 +37,7 @@ type TestService1 struct {
 }
 
 func (TestService1) Hello(entry ctx.Entry) interface{} {
-	ts := rand.Intn(1000)
+	ts := rand.Intn(100)
 	time.Sleep(time.Millisecond * time.Duration(ts))
 	println(ts)
 	name := entry.String("name")

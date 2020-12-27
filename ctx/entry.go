@@ -4,6 +4,7 @@ package ctx
 type Entry interface {
 	String(string) string
 	Value(string) Value
+	Body() string
 }
 
 type Result struct {

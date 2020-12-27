@@ -1,1 +1,1 @@
-GET http://localhost:8889/testservice1/hello/1.1 http/1.1
+POST http://localhost:8889/testservice1/hello/1.1 http/1.1

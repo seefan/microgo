@@ -48,6 +48,10 @@ type HTTPServer struct {
 	Result func(result *ctx.Result, err error) interface{}
 	//log
 	RuntimeLog func(err error)
+	//parse websocket path
+	WebSocketPath func(string) (string, string)
+	//parse webscoket message
+	WebSocketMessage func(string) (map[string]string, error)
 }
 
 // NewHTTPServer create new http server
@@ -93,6 +97,24 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 	hs.Marshal = func(content *ctx.Result, err error) ([]byte, error) {
 		re := hs.Result(content, err)
 		return json.Marshal(re)
+	}
+	hs.WebSocketPath = func(s string) (string, string) {
+		b := strings.IndexRune(s, '\n')
+		if b != -1 {
+			return string(s[0:b]), string(s[b:])
+		}
+		return s, ""
+	}
+	hs.WebSocketMessage = func(s string) (map[string]string, error) {
+		if s == "" {
+			return nil, nil
+		}
+		p := make(map[string]string)
+		err := json.Unmarshal([]byte(s), &p)
+		if err != nil {
+			return nil, err
+		}
+		return p, nil
 	}
 	hs.Server.Init(host, port)
 	return hs
@@ -232,37 +254,35 @@ func (h *HTTPServer) run() error {
 	if h.docOnline != "" {
 		mux.HandleFunc(h.docOnline, h.handleDoc)
 	}
-
+	if h.websocketURL != "" {
+		mux.Handle(h.websocketURL, &archiveWebsocketHandler{archMap: h.arch, path: h.WebSocketPath, message: h.WebSocketMessage, createContext: h.Context, call: func(content *ctx.Result, err error) []byte {
+			bs, err := h.Marshal(content, err)
+			if err != nil {
+				h.RuntimeLog(err)
+				return nil
+			}
+			return bs
+		}})
+	}
 	for path, s := range h.arch {
-		if h.websocketURL != "" && strings.HasPrefix(path, h.websocketURL) {
-			mux.Handle(path, &archiveWebsocketHandler{arch: s, createContext: h.Context, call: func(content *ctx.Result, err error) []byte {
+		mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(content *ctx.Result, err error, request *http.Request, writer http.ResponseWriter) {
+			for k, v := range h.header {
+				writer.Header().Set(k, v)
+			}
+			if r, ok := content.Response.(*template.HTML); ok {
+				writer.Header().Set("Content-Type", "text/html;charset=utf-8")
+				h.html(r, err, request, writer)
+			} else {
 				bs, err := h.Marshal(content, err)
 				if err != nil {
 					h.RuntimeLog(err)
-					return nil
+					return
 				}
-				return bs
-			}})
-		} else {
-			mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(content *ctx.Result, err error, request *http.Request, writer http.ResponseWriter) {
-				for k, v := range h.header {
-					writer.Header().Set(k, v)
+				if _, err := writer.Write(bs); err != nil {
+					h.RuntimeLog(err)
 				}
-				if r, ok := content.Response.(*template.HTML); ok {
-					writer.Header().Set("Content-Type", "text/html;charset=utf-8")
-					h.html(r, err, request, writer)
-				} else {
-					bs, err := h.Marshal(content, err)
-					if err != nil {
-						h.RuntimeLog(err)
-						return
-					}
-					if _, err := writer.Write(bs); err != nil {
-						h.RuntimeLog(err)
-					}
-				}
-			}})
-		}
+			}
+		}})
 	}
 
 	if h.staticPath != "" {
