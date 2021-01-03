@@ -270,6 +270,7 @@ func (h *HTTPServer) run() error {
 				writer.Header().Set(k, v)
 			}
 			if r, ok := content.Response.(*template.HTML); ok {
+				r.Context["__req__"] = content.Request
 				writer.Header().Set("Content-Type", "text/html;charset=utf-8")
 				h.html(r, err, request, writer)
 			} else {
