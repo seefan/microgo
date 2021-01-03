@@ -229,19 +229,6 @@ func (h *HTTPServer) html(ht *template.HTML, err error, request *http.Request, w
 		return
 	}
 	if h.tpl != nil {
-		if len(request.Form) > 0 {
-			rspForm := make(map[string]interface{})
-			for k, v := range request.Form {
-				if len(v) == 0 {
-					rspForm[k] = ""
-				} else if len(v) == 1 {
-					rspForm[k] = v[0]
-				} else {
-					rspForm[k] = v
-				}
-			}
-			ht.Context["_form"] = rspForm
-		}
 		if err := h.tpl.MakeFile(ht.URL, w, ht.Context); err != nil {
 			h.RuntimeLog(err)
 		}
@@ -264,6 +251,9 @@ func (h *HTTPServer) run() error {
 			return bs
 		}})
 	}
+	mux.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
+
+	})
 	for path, s := range h.arch {
 		mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(content *ctx.Result, err error, request *http.Request, writer http.ResponseWriter) {
 			for k, v := range h.header {

@@ -30,6 +30,10 @@ func newContext(writer http.ResponseWriter, request *http.Request) *HTTPContext 
 			c.form = request.Form
 		}
 	}
+	if c.form == nil {
+		c.form = request.URL.Query()
+	}
+
 	return c
 }
 
