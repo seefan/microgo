@@ -18,11 +18,9 @@ func main() {
 		//s.SetTemplatePath("/Volumes/doc/test/tpl", ".html")
 		//s.Prefix = "/svr"
 		s.SetWebsocketURL("/ws")
-		s.Result = func(result *ctx.Result, err error) interface{} {
+		s.Result = func(result *ctx.Result) interface{} {
 			re := make(map[string]interface{})
-			if err != nil {
-				re["error"] = err.Error()
-			} else if result.Response != nil {
+			if result.Response != nil {
 				if e, ok := result.Response.(error); ok && e != nil {
 					re["error"] = e.Error()
 				} else {
