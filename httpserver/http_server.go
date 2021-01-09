@@ -232,11 +232,8 @@ func (h *HTTPServer) RegisterBeforeWare(svc service.Service, md ...service.Ware)
 		}
 	}
 }
-func (h *HTTPServer) html(ht *template.HTML, err error, request *http.Request, w io.Writer) {
-	if err != nil {
-		h.RuntimeLog(err)
-		return
-	}
+func (h *HTTPServer) html(ht *template.HTML, request *http.Request, w io.Writer) {
+
 	if h.tpl != nil {
 		if err := h.tpl.MakeFile(ht.URL, w, ht.Context); err != nil {
 			h.RuntimeLog(err)
@@ -274,7 +271,7 @@ func (h *HTTPServer) run() error {
 			if r, ok := content.Response.(*template.HTML); ok {
 				r.Context["ctx"] = content
 				writer.Header().Set("Content-Type", "text/html;charset=utf-8")
-				h.html(r, err, request, writer)
+				h.html(r, request, writer)
 			} else {
 				bs, err := h.Marshal(content)
 				if err != nil {
