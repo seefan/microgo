@@ -43,9 +43,11 @@ type HTTPServer struct {
 	//method context
 	Context func(*HTTPContext) ctx.Entry
 	//Marshal format
-	Marshal func(result *ctx.Result, err error) ([]byte, error)
+	Marshal func(result *ctx.Result) ([]byte, error)
 	//result format
-	Result func(result *ctx.Result, err error) interface{}
+	Result func(result *ctx.Result) interface{}
+	//error format
+	Error func(result *ctx.Result, err error)
 	//log
 	RuntimeLog func(err error)
 	//parse websocket path
@@ -72,7 +74,10 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			log.Println(err)
 		},
 	}
-	hs.Result = func(content *ctx.Result, err error) interface{} {
+	hs.Error = func(content *ctx.Result, err error) {
+		if err == nil {
+			return
+		}
 		re := make(map[string]interface{})
 		if err != nil {
 			hs.RuntimeLog(err)
@@ -81,8 +86,12 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 			} else {
 				re["error"] = err.Error()
 			}
-
-		} else if content.Response != nil {
+		}
+		content.Response = re
+	}
+	hs.Result = func(content *ctx.Result) interface{} {
+		re := make(map[string]interface{})
+		if content.Response != nil {
 			if e, ok := content.Response.(error); ok && e != nil {
 				re["error"] = e.Error()
 			} else {
@@ -94,8 +103,8 @@ func NewHTTPServer(host string, port int) *HTTPServer {
 		}
 		return re
 	}
-	hs.Marshal = func(content *ctx.Result, err error) ([]byte, error) {
-		re := hs.Result(content, err)
+	hs.Marshal = func(content *ctx.Result) ([]byte, error) {
+		re := hs.Result(content)
 		return json.Marshal(re)
 	}
 	hs.WebSocketPath = func(s string) (string, string) {
@@ -243,7 +252,7 @@ func (h *HTTPServer) run() error {
 	}
 	if h.websocketURL != "" {
 		mux.Handle(h.websocketURL, &archiveWebsocketHandler{archMap: h.arch, path: h.WebSocketPath, message: h.WebSocketMessage, createContext: h.Context, call: func(content *ctx.Result, err error) []byte {
-			bs, err := h.Marshal(content, err)
+			bs, err := h.Marshal(content)
 			if err != nil {
 				h.RuntimeLog(err)
 				return nil
@@ -256,15 +265,18 @@ func (h *HTTPServer) run() error {
 	})
 	for path, s := range h.arch {
 		mux.Handle(path, &archiveHandler{arch: s, createContext: h.Context, call: func(content *ctx.Result, err error, request *http.Request, writer http.ResponseWriter) {
+			if err != nil {
+				h.Error(content, err)
+			}
 			for k, v := range h.header {
 				writer.Header().Set(k, v)
 			}
 			if r, ok := content.Response.(*template.HTML); ok {
-				r.Context["ctx"] = content.Request
+				r.Context["ctx"] = content
 				writer.Header().Set("Content-Type", "text/html;charset=utf-8")
 				h.html(r, err, request, writer)
 			} else {
-				bs, err := h.Marshal(content, err)
+				bs, err := h.Marshal(content)
 				if err != nil {
 					h.RuntimeLog(err)
 					return
